@@ -78,6 +78,8 @@ foo.bar[0].value
 (1 + 2) * 3^2
 ```
 
+Math operations between constants are precomputed when possible, so it is efficient to write meaningful operations like `size <= 4 * 1024 * 1024`. The interpreter will see this as `size <= 4194304`.
+
 ### Comparison operators
 
 - `==` (equal)
@@ -118,7 +120,7 @@ Non-boolean values are converted to booleans. The following result in `true`:
 - `startsWith` e.g. `"foo" startsWith "f"`
 - `endsWith` e.g. `"foo" endsWith "o"`
 
-Slices indexes are mandatory and _inclusive_. Indexes can be negative, e.g. `foo[-1]` selects the last item in the array.
+Slice indexes are mandatory and _inclusive_. Indexes can be negative, e.g. `foo[-1]` selects the last item in the array.
 
 Any value concatenated with a string will result in a string. For example `"id" + 1` will result in `"id1"`.
 
@@ -132,7 +134,7 @@ There is no distinction between strings, bytes, or runes. Everything is treated 
 - `+` (concatenation)
 - `in` (has item), e.g. `1 in foo`
 
-Slices indexes are mandatory and _inclusive_. Indexes can be negative, e.g. `foo[-1]` selects the last item in the array.
+Slice indexes are mandatory and _inclusive_. Indexes can be negative, e.g. `foo[-1]` selects the last item in the array.
 
 ### Map operators
 
@@ -148,10 +150,10 @@ goos: darwin
 goarch: amd64
 pkg: github.com/danielgtaylor/mexpr
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
-BenchmarkMexpr-12            	 2288487      2590 ns/op	    1064 B/op	      33 allocs/op
-BenchmarkMexprCached-12      	33290458       177.8 ns/op	      32 B/op	       4 allocs/op
-BenchmarkLibExpr-12          	  621049      9300 ns/op	    7474 B/op	      75 allocs/op
-BenchmarkLibExprCached-12    	14324178       412.1 ns/op	      96 B/op	       6 allocs/op
+BenchmarkMexpr-12          	 2250564      2641 ns/op	   1064 B/op     33 allocs/op
+BenchmarkMexprCached-12    	47554875     123.5 ns/op	     16 B/op      2 allocs/op
+BenchmarkLibExpr-12           621049      9300 ns/op	   7474 B/op     75 allocs/op
+BenchmarkLibExprCached-12   14324178     412.1 ns/op	     96 B/op      6 allocs/op
 ```
 
 ## References

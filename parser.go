@@ -1,6 +1,7 @@
 package mexpr
 
 import (
+	"math"
 	"strconv"
 )
 
@@ -60,6 +61,35 @@ var bindingPowers = map[TokenType]int{
 	TokenPower:         50,
 	TokenLeftBracket:   60,
 	TokenLeftParen:     70,
+}
+
+// precomputeLiterals takes two `NodeLiteral` nodes and a math operation and
+// generates a single literal node for the resutl. This prevents the interpreter
+// from needing to re-compute the value each time.
+func precomputeLiterals(offset int, nodeType NodeType, left, right *Node) (*Node, Error) {
+	leftValue, err := toNumber(left, left.Value)
+	if err != nil {
+		return nil, err
+	}
+	rightValue, err := toNumber(right, right.Value)
+	if err != nil {
+		return nil, err
+	}
+	switch nodeType {
+	case NodeAdd:
+		return &Node{Type: NodeLiteral, Offset: offset, Value: leftValue + rightValue}, nil
+	case NodeSubtract:
+		return &Node{Type: NodeLiteral, Offset: offset, Value: leftValue - rightValue}, nil
+	case NodeMultiply:
+		return &Node{Type: NodeLiteral, Offset: offset, Value: leftValue * rightValue}, nil
+	case NodeDivide:
+		return &Node{Type: NodeLiteral, Offset: offset, Value: leftValue / rightValue}, nil
+	case NodeModulus:
+		return &Node{Type: NodeLiteral, Offset: offset, Value: float64(int(leftValue) % int(rightValue))}, nil
+	case NodePower:
+		return &Node{Type: NodeLiteral, Offset: offset, Value: math.Pow(leftValue, rightValue)}, nil
+	}
+	return nil, NewError(offset, "Can't precompute unknown operator")
 }
 
 // Parser takes a lexer and parses its tokens into an abstract syntax tree.
@@ -192,7 +222,7 @@ func (p *parser) newNodeParseRight(left *Node, t *Token, typ NodeType, bindingPo
 // a left and a right. Examples: addition, multiplication, etc.
 func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 	switch t.Type {
-	case TokenAddSub, TokenMulDiv:
+	case TokenAddSub, TokenMulDiv, TokenPower:
 		var nodeType NodeType
 		switch t.Value[0] {
 		case '+':
@@ -205,10 +235,26 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 			nodeType = NodeDivide
 		case '%':
 			nodeType = NodeModulus
+		case '^':
+			nodeType = NodePower
 		}
-		return p.newNodeParseRight(n, t, nodeType, bindingPowers[t.Type])
-	case TokenPower:
-		return p.newNodeParseRight(n, t, NodePower, bindingPowers[t.Type]-1)
+		offset := t.Offset
+		binding := bindingPowers[t.Type]
+		if t.Type == TokenPower {
+			// Power operations should be right-associative, so we lower the binding
+			// power slightly so it prefers going right.
+			binding--
+		}
+		right, err := p.parse(binding)
+		if err != nil {
+			return nil, err
+		}
+		if n.Type == NodeLiteral && right.Type == NodeLiteral {
+			if !(isString(n.Value) || isString(right.Value)) {
+				return precomputeLiterals(offset, nodeType, n, right)
+			}
+		}
+		return &Node{Type: nodeType, Offset: offset, Left: n, Right: right}, nil
 	case TokenComparison:
 		var nodeType NodeType
 		switch t.Value {
