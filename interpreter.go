@@ -153,7 +153,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			right = -right
 		}
 		return right, nil
-	case NodeArithmetic:
+	case NodeAdd, NodeSubtract, NodeMultiply, NodeDivide, NodePower:
 		resultLeft, err := i.run(ast.Left, value)
 		if err != nil {
 			return nil, err
@@ -162,7 +162,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		if err != nil {
 			return nil, err
 		}
-		if ast.Value.(string)[0] == '+' {
+		if ast.Type == NodeAdd {
 			if isString(resultLeft) || isString(resultRight) {
 				return toString(resultLeft) + toString(resultRight), nil
 			}
@@ -180,23 +180,23 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			if err != nil {
 				return nil, err
 			}
-			switch ast.Value.(string)[0] {
-			case '+':
+			switch ast.Type {
+			case NodeAdd:
 				return left + right, nil
-			case '-':
+			case NodeSubtract:
 				return left - right, nil
-			case '*':
+			case NodeMultiply:
 				return left * right, nil
-			case '/':
+			case NodeDivide:
 				return left / right, nil
-			case '%':
+			case NodeModulus:
 				return float64(int(left) % int(right)), nil
-			case '^':
+			case NodePower:
 				return math.Pow(left, right), nil
 			}
 		}
 		return nil, NewError(ast.Offset, "cannot add incompatible types %v and %v", resultLeft, resultRight)
-	case NodeComparison:
+	case NodeEqual, NodeNotEqual, NodeLessThan, NodeLessThanEqual, NodeGreaterThan, NodeGreaterThanEqual:
 		resultLeft, err := i.run(ast.Left, value)
 		if err != nil {
 			return nil, err
@@ -205,10 +205,10 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		if err != nil {
 			return nil, err
 		}
-		if ast.Value.(string) == "==" {
+		if ast.Type == NodeEqual {
 			return resultLeft == resultRight, nil
 		}
-		if ast.Value.(string) == "!=" {
+		if ast.Type == NodeNotEqual {
 			return resultLeft != resultRight, nil
 		}
 
@@ -221,17 +221,17 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			return nil, err
 		}
 
-		switch ast.Value.(string) {
-		case ">":
+		switch ast.Type {
+		case NodeGreaterThan:
 			return left > right, nil
-		case ">=":
+		case NodeGreaterThanEqual:
 			return left >= right, nil
-		case "<":
+		case NodeLessThan:
 			return left < right, nil
-		case "<=":
+		case NodeLessThanEqual:
 			return left <= right, nil
 		}
-	case NodeBooleanComparison:
+	case NodeAnd, NodeOr:
 		resultLeft, err := i.run(ast.Left, value)
 		if err != nil {
 			return nil, err
@@ -242,13 +242,13 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		}
 		left := toBool(resultLeft)
 		right := toBool(resultRight)
-		switch ast.Value.(string) {
-		case "and":
+		switch ast.Type {
+		case NodeAnd:
 			return left && right, nil
-		case "or":
+		case NodeOr:
 			return left || right, nil
 		}
-	case NodeStringCompare:
+	case NodeIn, NodeStartsWith, NodeEndsWith:
 		resultLeft, err := i.run(ast.Left, value)
 		if err != nil {
 			return nil, err
@@ -257,8 +257,8 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		if err != nil {
 			return nil, err
 		}
-		switch ast.Value.(string) {
-		case "in":
+		switch ast.Type {
+		case NodeIn:
 			if a, ok := resultRight.([]interface{}); ok {
 				for _, item := range a {
 					if item == resultLeft {
@@ -274,9 +274,9 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 				return false, nil
 			}
 			return strings.Contains(toString(resultRight), toString(resultLeft)), nil
-		case "startsWith":
+		case NodeStartsWith:
 			return strings.HasPrefix(toString(resultLeft), toString(resultRight)), nil
-		case "endsWith":
+		case NodeEndsWith:
 			return strings.HasSuffix(toString(resultLeft), toString(resultRight)), nil
 		}
 	case NodeNot:

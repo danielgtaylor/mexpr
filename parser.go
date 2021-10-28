@@ -11,15 +11,28 @@ const (
 	NodeUnknown = iota
 	NodeIdentifier
 	NodeLiteral
-	NodeArithmetic
-	NodeComparison
-	NodeBooleanComparison
+	NodeAdd
+	NodeSubtract
+	NodeMultiply
+	NodeDivide
+	NodeModulus
+	NodePower
+	NodeEqual
+	NodeNotEqual
+	NodeLessThan
+	NodeLessThanEqual
+	NodeGreaterThan
+	NodeGreaterThanEqual
+	NodeAnd
+	NodeOr
 	NodeNot
 	NodeFieldSelect
 	NodeArrayIndex
 	NodeSlice
 	NodeSign
-	NodeStringCompare
+	NodeIn
+	NodeStartsWith
+	NodeEndsWith
 )
 
 // Node is a unit of the binary tree that makes up the abstract syntax tree.
@@ -150,14 +163,13 @@ func (p *parser) nud(t *Token) (*Node, Error) {
 		}
 		return &Node{Type: NodeSign, Value: value, Offset: offset, Right: result}, nil
 	case TokenSlice:
-		value := t.Value
 		offset := t.Offset
 		result, err := p.parse(bindingPowers[t.Type])
 		if err != nil {
 			return nil, err
 		}
 		// Create a dummy left node with value 0, the start of the slice.
-		return &Node{Type: NodeSlice, Value: value, Offset: offset, Left: &Node{Type: NodeLiteral, Value: 0.0, Offset: offset}, Right: result}, nil
+		return &Node{Type: NodeSlice, Offset: offset, Left: &Node{Type: NodeLiteral, Value: 0.0, Offset: offset}, Right: result}, nil
 	case TokenEOF:
 		return nil, NewError(p.token.Offset, "incomplete expression, EOF found")
 	}
@@ -167,13 +179,12 @@ func (p *parser) nud(t *Token) (*Node, Error) {
 // newNodeParseRight creates a new node with the right tree set to the
 // output of recursively parsing until a lower binding power is encountered.
 func (p *parser) newNodeParseRight(left *Node, t *Token, typ NodeType, bindingPower int) (*Node, Error) {
-	value := t.Value
 	offset := t.Offset
 	right, err := p.parse(bindingPower)
 	if err != nil {
 		return nil, err
 	}
-	return &Node{Type: typ, Value: value, Offset: offset, Left: left, Right: right}, nil
+	return &Node{Type: typ, Offset: offset, Left: left, Right: right}, nil
 }
 
 // led: left denotation. These tokens produce nodes that operate on two operands
@@ -181,15 +192,54 @@ func (p *parser) newNodeParseRight(left *Node, t *Token, typ NodeType, bindingPo
 func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 	switch t.Type {
 	case TokenAddSub, TokenMulDiv:
-		return p.newNodeParseRight(n, t, NodeArithmetic, bindingPowers[t.Type])
+		var nodeType NodeType
+		switch t.Value[0] {
+		case '+':
+			nodeType = NodeAdd
+		case '-':
+			nodeType = NodeSubtract
+		case '*':
+			nodeType = NodeMultiply
+		case '/':
+			nodeType = NodeDivide
+		case '%':
+			nodeType = NodeModulus
+		}
+		return p.newNodeParseRight(n, t, nodeType, bindingPowers[t.Type])
 	case TokenPower:
-		return p.newNodeParseRight(n, t, NodeArithmetic, bindingPowers[t.Type]-1)
+		return p.newNodeParseRight(n, t, NodePower, bindingPowers[t.Type]-1)
 	case TokenComparison:
-		return p.newNodeParseRight(n, t, NodeComparison, bindingPowers[t.Type])
-	case TokenAnd, TokenOr:
-		return p.newNodeParseRight(n, t, NodeBooleanComparison, bindingPowers[t.Type])
+		var nodeType NodeType
+		switch t.Value {
+		case "==":
+			nodeType = NodeEqual
+		case "!=":
+			nodeType = NodeNotEqual
+		case "<":
+			nodeType = NodeLessThan
+		case "<=":
+			nodeType = NodeLessThanEqual
+		case ">":
+			nodeType = NodeGreaterThan
+		case ">=":
+			nodeType = NodeGreaterThanEqual
+		}
+		return p.newNodeParseRight(n, t, nodeType, bindingPowers[t.Type])
+	case TokenAnd:
+		return p.newNodeParseRight(n, t, NodeAnd, bindingPowers[t.Type])
+	case TokenOr:
+		return p.newNodeParseRight(n, t, NodeOr, bindingPowers[t.Type])
 	case TokenStringCompare:
-		return p.newNodeParseRight(n, t, NodeStringCompare, bindingPowers[t.Type])
+		var nodeType NodeType
+		switch t.Value {
+		case "in":
+			nodeType = NodeIn
+		case "startsWith":
+			nodeType = NodeStartsWith
+		case "endsWith":
+			nodeType = NodeEndsWith
+		}
+		return p.newNodeParseRight(n, t, nodeType, bindingPowers[t.Type])
 	case TokenDot:
 		return p.newNodeParseRight(n, t, NodeFieldSelect, bindingPowers[t.Type])
 	case TokenLeftBracket:
