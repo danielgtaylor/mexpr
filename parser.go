@@ -1,7 +1,6 @@
 package mexpr
 
 import (
-	"fmt"
 	"strconv"
 )
 
@@ -25,22 +24,11 @@ const (
 
 // Node is a unit of the binary tree that makes up the abstract syntax tree.
 type Node struct {
-	Type  NodeType
-	Token *Token
-	Value interface{}
-	Left  *Node
-	Right *Node
-}
-
-// Print will print out a tree for debugging.
-func (n *Node) Print(prefix string) {
-	fmt.Printf("%s%s %s\n", prefix, n.Token.Type, n.Token.Value)
-	if n.Left != nil {
-		n.Left.Print(prefix + "L: ")
-	}
-	if n.Right != nil {
-		n.Right.Print(prefix + "R: ")
-	}
+	Type   NodeType
+	Value  interface{}
+	Offset int
+	Left   *Node
+	Right  *Node
 }
 
 // bindingPowers for different tokens. Not listed means zero. The higher the
@@ -78,14 +66,9 @@ func NewParser(lexer Lexer) Parser {
 type parser struct {
 	lexer Lexer
 	token *Token
-	back  bool
 }
 
 func (p *parser) advance() Error {
-	if p.back {
-		return nil
-	}
-
 	t, err := p.lexer.Next()
 	if err != nil {
 		return err
@@ -95,24 +78,24 @@ func (p *parser) advance() Error {
 }
 
 func (p *parser) parse(bindingPower int) (*Node, Error) {
-	leftToken := p.token
+	leftToken := *p.token
 	if err := p.advance(); err != nil {
 		return nil, err
 	}
-	leftNode, err := p.nud(leftToken)
+	leftNode, err := p.nud(&leftToken)
 	if err != nil {
 		return nil, err
 	}
-	currentToken := p.token
+	currentToken := *p.token
 	for bindingPower < bindingPowers[currentToken.Type] {
 		if err := p.advance(); err != nil {
 			return nil, err
 		}
-		leftNode, err = p.led(currentToken, leftNode)
+		leftNode, err = p.led(&currentToken, leftNode)
 		if err != nil {
 			return nil, err
 		}
-		currentToken = p.token
+		currentToken = *p.token
 	}
 	return leftNode, nil
 }
@@ -139,37 +122,42 @@ func (p *parser) ensure(result *Node, err Error, typ TokenType) (*Node, Error) {
 func (p *parser) nud(t *Token) (*Node, Error) {
 	switch t.Type {
 	case TokenIdentifier:
-		return &Node{Type: NodeIdentifier, Token: t}, nil
+		return &Node{Type: NodeIdentifier, Value: t.Value, Offset: t.Offset}, nil
 	case TokenNumber:
 		f, err := strconv.ParseFloat(t.Value, 64)
 		if err != nil {
 			return nil, NewError(p.token.Offset, err.Error())
 		}
-		return &Node{Type: NodeLiteral, Token: t, Value: f}, nil
+		return &Node{Type: NodeLiteral, Value: f, Offset: t.Offset}, nil
 	case TokenString:
-		return &Node{Type: NodeLiteral, Token: t, Value: t.Value}, nil
+		return &Node{Type: NodeLiteral, Value: t.Value, Offset: t.Offset}, nil
 	case TokenLeftParen:
 		result, err := p.parse(0)
 		return p.ensure(result, err, TokenRightParen)
 	case TokenNot:
+		offset := t.Offset
 		result, err := p.parse(bindingPowers[t.Type])
 		if err != nil {
 			return nil, err
 		}
-		return &Node{Type: NodeNot, Token: t, Right: result}, nil
+		return &Node{Type: NodeNot, Offset: offset, Right: result}, nil
 	case TokenAddSub:
+		value := t.Value
+		offset := t.Offset
 		result, err := p.parse(bindingPowers[t.Type])
 		if err != nil {
 			return nil, err
 		}
-		return &Node{Type: NodeSign, Token: t, Right: result}, nil
+		return &Node{Type: NodeSign, Value: value, Offset: offset, Right: result}, nil
 	case TokenSlice:
+		value := t.Value
+		offset := t.Offset
 		result, err := p.parse(bindingPowers[t.Type])
 		if err != nil {
 			return nil, err
 		}
 		// Create a dummy left node with value 0, the start of the slice.
-		return &Node{Type: NodeSlice, Token: t, Left: &Node{Type: NodeLiteral, Token: t, Value: 0.0}, Right: result}, nil
+		return &Node{Type: NodeSlice, Value: value, Offset: offset, Left: &Node{Type: NodeLiteral, Value: 0.0, Offset: offset}, Right: result}, nil
 	case TokenEOF:
 		return nil, NewError(p.token.Offset, "incomplete expression, EOF found")
 	}
@@ -179,11 +167,13 @@ func (p *parser) nud(t *Token) (*Node, Error) {
 // newNodeParseRight creates a new node with the right tree set to the
 // output of recursively parsing until a lower binding power is encountered.
 func (p *parser) newNodeParseRight(left *Node, t *Token, typ NodeType, bindingPower int) (*Node, Error) {
+	value := t.Value
+	offset := t.Offset
 	right, err := p.parse(bindingPower)
 	if err != nil {
 		return nil, err
 	}
-	return &Node{Type: typ, Token: t, Left: left, Right: right}, nil
+	return &Node{Type: typ, Value: value, Offset: offset, Left: left, Right: right}, nil
 }
 
 // led: left denotation. These tokens produce nodes that operate on two operands

@@ -59,7 +59,8 @@ func (t *Token) String() string {
 
 // Lexer returns tokens from an input expression.
 type Lexer interface {
-	// Next returns the next token from the expression.
+	// Next returns the next token from the expression. The returned token may
+	// be changed in-place on subsequent calls and should not be stored.
 	Next() (*Token, Error)
 }
 
@@ -69,6 +70,7 @@ func NewLexer(expression string) Lexer {
 		expression: expression,
 		pos:        0,
 		lastWidth:  0,
+		token:      &Token{},
 	}
 }
 
@@ -76,6 +78,10 @@ type lexer struct {
 	expression string
 	pos        int
 	lastWidth  int
+
+	// token is a cached token to prevent new tokens from being allocated.
+	// It is re-used on each call to `Next()`.
+	token *Token
 }
 
 // next returns the next rune in the expression at the current position.
@@ -103,7 +109,10 @@ func (l *lexer) peek() rune {
 }
 
 func (l *lexer) newToken(typ TokenType, value string) *Token {
-	return &Token{Type: typ, Value: value, Offset: l.pos - len(value)}
+	l.token.Type = typ
+	l.token.Value = value
+	l.token.Offset = l.pos - len(value)
+	return l.token
 }
 
 // consumeNumber reads runes from the expression until a non-number or
@@ -149,7 +158,7 @@ func (l *lexer) consumeIdentifier() *Token {
 // consumeString reads runes from the expression until a non-escaped double
 // quote is encountered. Only double-quoted strings are supported.
 func (l *lexer) consumeString() *Token {
-	buf := bytes.NewBuffer([]byte{})
+	buf := bytes.NewBuffer(make([]byte, 0, 8))
 	for {
 		r := l.next()
 		if r == '\\' && l.peek() == '"' {

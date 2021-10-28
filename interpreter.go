@@ -45,7 +45,7 @@ func (i *interpreter) Run(value interface{}) (interface{}, Error) {
 func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 	switch ast.Type {
 	case NodeIdentifier:
-		if ast.Token.Value == "length" {
+		if ast.Value.(string) == "length" {
 			// Special pseudo-property to get the value's length.
 			if s, ok := value.(string); ok {
 				return float64(len(s)), nil
@@ -56,13 +56,13 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		}
 		if m, ok := value.(map[string]interface{}); ok {
 			if !i.strict {
-				return m[ast.Token.Value], nil
+				return m[ast.Value.(string)], nil
 			}
-			if v, ok := m[ast.Token.Value]; ok {
+			if v, ok := m[ast.Value.(string)]; ok {
 				return v, nil
 			}
 		}
-		return nil, NewError(ast.Token.Offset, "cannot get %s from %v", ast.Token.Value, value)
+		return nil, NewError(ast.Offset, "cannot get %v from %v", ast.Value, value)
 	case NodeFieldSelect:
 		leftValue, err := i.run(ast.Left, value)
 		if err != nil {
@@ -75,7 +75,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			return nil, err
 		}
 		if !isSlice(resultLeft) && !isString(resultLeft) {
-			return nil, NewError(ast.Token.Offset, "can only index strings or arrays but got %v", resultLeft)
+			return nil, NewError(ast.Offset, "can only index strings or arrays but got %v", resultLeft)
 		}
 		resultRight, err := i.run(ast.Right, value)
 		if err != nil {
@@ -127,7 +127,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 				return string(left[int(idx)]), nil
 			}
 		}
-		return nil, NewError(ast.Token.Offset, "array index must be number or slice %v", resultRight)
+		return nil, NewError(ast.Offset, "array index must be number or slice %v", resultRight)
 	case NodeSlice:
 		resultLeft, err := i.run(ast.Left, value)
 		if err != nil {
@@ -149,7 +149,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		if err != nil {
 			return nil, err
 		}
-		if ast.Token.Value == "-" {
+		if ast.Value.(string) == "-" {
 			right = -right
 		}
 		return right, nil
@@ -162,7 +162,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		if err != nil {
 			return nil, err
 		}
-		if ast.Token.Value[0] == '+' {
+		if ast.Value.(string)[0] == '+' {
 			if isString(resultLeft) || isString(resultRight) {
 				return toString(resultLeft) + toString(resultRight), nil
 			}
@@ -180,7 +180,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			if err != nil {
 				return nil, err
 			}
-			switch ast.Token.Value[0] {
+			switch ast.Value.(string)[0] {
 			case '+':
 				return left + right, nil
 			case '-':
@@ -195,7 +195,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 				return math.Pow(left, right), nil
 			}
 		}
-		return nil, NewError(ast.Token.Offset, "cannot add incompatible types %v and %v", resultLeft, resultRight)
+		return nil, NewError(ast.Offset, "cannot add incompatible types %v and %v", resultLeft, resultRight)
 	case NodeComparison:
 		resultLeft, err := i.run(ast.Left, value)
 		if err != nil {
@@ -205,10 +205,10 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		if err != nil {
 			return nil, err
 		}
-		if ast.Token.Value == "==" {
+		if ast.Value.(string) == "==" {
 			return resultLeft == resultRight, nil
 		}
-		if ast.Token.Value == "!=" {
+		if ast.Value.(string) == "!=" {
 			return resultLeft != resultRight, nil
 		}
 
@@ -221,7 +221,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			return nil, err
 		}
 
-		switch ast.Token.Value {
+		switch ast.Value.(string) {
 		case ">":
 			return left > right, nil
 		case ">=":
@@ -242,7 +242,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		}
 		left := toBool(resultLeft)
 		right := toBool(resultRight)
-		switch ast.Token.Value {
+		switch ast.Value.(string) {
 		case "and":
 			return left && right, nil
 		case "or":
@@ -257,7 +257,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		if err != nil {
 			return nil, err
 		}
-		switch ast.Token.Value {
+		switch ast.Value.(string) {
 		case "in":
 			if a, ok := resultRight.([]interface{}); ok {
 				for _, item := range a {
