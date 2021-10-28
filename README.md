@@ -150,10 +150,10 @@ goos: darwin
 goarch: amd64
 pkg: github.com/danielgtaylor/mexpr
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
-BenchmarkMexpr-12          	 2250564      2641 ns/op	   1064 B/op     33 allocs/op
-BenchmarkMexprCached-12    	47554875     123.5 ns/op	     16 B/op      2 allocs/op
-BenchmarkLibExpr-12           621049      9300 ns/op	   7474 B/op     75 allocs/op
-BenchmarkLibExprCached-12   14324178     412.1 ns/op	     96 B/op      6 allocs/op
+BenchmarkMexpr-12            2250564      2641 ns/op    1064 B/op    33 allocs/op
+BenchmarkMexprCached-12     47554875     123.5 ns/op      16 B/op     2 allocs/op
+BenchmarkLibExpr-12           621049      9300 ns/op    7474 B/op    75 allocs/op
+BenchmarkLibExprCached-12   14324178     412.1 ns/op      96 B/op     6 allocs/op
 ```
 
 ## References
