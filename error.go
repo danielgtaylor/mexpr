@@ -29,6 +29,7 @@ func (e *exprErr) Pretty(source string) string {
 	return msg
 }
 
+// NewError creates a new error at a specific location.
 func NewError(offset int, format string, a ...interface{}) Error {
 	return &exprErr{
 		offset:  offset,

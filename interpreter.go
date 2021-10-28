@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// InterpreterOption passes configuration settings when creating a new
+// interpreter instance.
 type InterpreterOption int
 
 const (
@@ -17,7 +19,7 @@ type Interpreter interface {
 	Run(value interface{}) (interface{}, Error)
 }
 
-// NewInterperter returns an interpreter for the given AST.
+// NewInterpreter returns an interpreter for the given AST.
 func NewInterpreter(ast *Node, options ...InterpreterOption) Interpreter {
 	strict := false
 
@@ -98,16 +100,15 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 					end = float64(len(left) + int(end))
 				}
 				return left[int(start) : int(end)+1], nil
-			} else {
-				left := toString(resultLeft)
-				if start < 0 {
-					start = float64(len(left) + int(start))
-				}
-				if end < 0 {
-					end = float64(len(left) + int(end))
-				}
-				return left[int(start) : int(end)+1], nil
 			}
+			left := toString(resultLeft)
+			if start < 0 {
+				start = float64(len(left) + int(start))
+			}
+			if end < 0 {
+				end = float64(len(left) + int(end))
+			}
+			return left[int(start) : int(end)+1], nil
 		}
 		if isNumber(resultRight) {
 			idx, err := toNumber(ast, resultRight)
@@ -119,13 +120,12 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 					idx = float64(len(left) + int(idx))
 				}
 				return left[int(idx)], nil
-			} else {
-				left := toString(resultLeft)
-				if idx < 0 {
-					idx = float64(len(left) + int(idx))
-				}
-				return string(left[int(idx)]), nil
 			}
+			left := toString(resultLeft)
+			if idx < 0 {
+				idx = float64(len(left) + int(idx))
+			}
+			return string(left[int(idx)]), nil
 		}
 		return nil, NewError(ast.Offset, "array index must be number or slice %v", resultRight)
 	case NodeSlice:

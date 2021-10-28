@@ -1,4 +1,4 @@
-// Package expr provides a simple expression parser.
+// Package mexpr provides a simple expression parser.
 package mexpr
 
 // Parse an expression and return the abstract syntax tree. If `types` is

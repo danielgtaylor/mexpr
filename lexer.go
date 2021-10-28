@@ -9,26 +9,27 @@ import (
 // TokenType defines the type of token produced by the lexer.
 type TokenType string
 
+// Token
 const (
-	TokenUnknown       = ""
-	TokenIdentifier    = "identifier"
-	TokenDot           = "dot"
-	TokenNumber        = "number"
-	TokenString        = "string"
-	TokenLeftParen     = "left-paren"
-	TokenRightParen    = "right-paren"
-	TokenLeftBracket   = "left-bracket"
-	TokenRightBracket  = "right-bracket"
-	TokenSlice         = "slice"
-	TokenAddSub        = "add-sub"
-	TokenMulDiv        = "mul-div"
-	TokenPower         = "power"
-	TokenComparison    = "comparison"
-	TokenAnd           = "and"
-	TokenOr            = "or"
-	TokenNot           = "not"
-	TokenStringCompare = "in"
-	TokenEOF           = "eof"
+	TokenUnknown       TokenType = ""
+	TokenIdentifier    TokenType = "identifier"
+	TokenDot           TokenType = "dot"
+	TokenNumber        TokenType = "number"
+	TokenString        TokenType = "string"
+	TokenLeftParen     TokenType = "left-paren"
+	TokenRightParen    TokenType = "right-paren"
+	TokenLeftBracket   TokenType = "left-bracket"
+	TokenRightBracket  TokenType = "right-bracket"
+	TokenSlice         TokenType = "slice"
+	TokenAddSub        TokenType = "add-sub"
+	TokenMulDiv        TokenType = "mul-div"
+	TokenPower         TokenType = "power"
+	TokenComparison    TokenType = "comparison"
+	TokenAnd           TokenType = "and"
+	TokenOr            TokenType = "or"
+	TokenNot           TokenType = "not"
+	TokenStringCompare TokenType = "in"
+	TokenEOF           TokenType = "eof"
 )
 
 var basic = map[rune]TokenType{
@@ -196,17 +197,15 @@ func (l *lexer) Next() (*Token, Error) {
 		eq := l.next()
 		if eq == '=' {
 			return l.newToken(TokenComparison, string(r)+"="), nil
-		} else {
-			l.back()
-			return l.newToken(TokenComparison, string(r)), nil
 		}
+		l.back()
+		return l.newToken(TokenComparison, string(r)), nil
 	case r == '=':
 		if l.peek() == '=' {
 			l.next()
 			return l.newToken(TokenComparison, "=="), nil
-		} else {
-			return nil, NewError(l.pos, "= should be ==")
 		}
+		return nil, NewError(l.pos, "= should be ==")
 	case r == '"':
 		return l.consumeString(), nil
 	}

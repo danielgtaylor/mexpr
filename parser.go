@@ -7,8 +7,9 @@ import (
 // NodeType defines the type of the abstract syntax tree node.
 type NodeType int
 
+// Possible node types
 const (
-	NodeUnknown = iota
+	NodeUnknown NodeType = iota
 	NodeIdentifier
 	NodeLiteral
 	NodeAdd
