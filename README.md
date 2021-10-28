@@ -4,6 +4,16 @@ A small & fast dependency-free library for parsing micro expressions.
 
 This library was originally built for use in templating languages (e.g. for-loop variable selection, if-statement evaluation) so is minimal in what it supports by design. If you need a more full-featured expression parser, check out [antonmedv/expr](https://github.com/antonmedv/expr) instead.
 
+Features:
+
+- Fast, low-allocation parser and runtime
+- Simple
+  - Easy to learn
+  - Easy to read
+  - No hiding complex branching logic in expressions
+- Intuitive, e.g. `"id" + 1` => `"id1"`
+- Useful error messages
+
 ## Usage
 
 ```go
@@ -15,19 +25,22 @@ result, err := mexpr.Eval("a + b", map[string]interface{}{
 	"b": 2,
 })
 
-// Manual method with type checking and fast AST re-use:
+// Manual method with type checking and fast AST re-use. Error handling is
+// omitted for brevity.
 l := mexpr.NewLexer("a + b")
+p := mexpr.NewParser(l)
+ast, err := mexpr.Parse()
 typeExamples = map[string]interface{}{
 	"a": 1,
 	"b": 1,
 }
-p := mexpr.NewParser(l, typeExamples)
-ast, err := p.Parse()
-result1, err := mexpr.Run(ast, map[string]interface{}{
+err := mexpr.TypeCheck(ast, typeExamples)
+interpreter := mexpr.NewInterpreter(ast)
+result1, err := interpreter.Run(map[string]interface{}{
 	"a": 1,
 	"b": 2,
 })
-result2, err := mexpr.Run(ast, map[string]interfae{}{
+result2, err := interpreter.Run(map[string]interfae{}{
 	"a": 150,
 	"b": 30,
 })
@@ -35,20 +48,20 @@ result2, err := mexpr.Run(ast, map[string]interfae{}{
 
 ## Syntax
 
-Literals:
+### Literals
 
 - **strings** double quoted e.g. `"hello"`
 - **numbers** e.g. `123`, `2.5`
 
 Internally all numbers are treated as `float64`, which means fewer conversions/casts when taking arbitrary JSON/YAML inputs.
 
-Accessing properties:
+### Accessing properties
 
 ```py
 foo.bar[0].value
 ```
 
-Arithmetic operators:
+### Arithmetic operators
 
 - `+` (addition)
 - `-` (subtration)
@@ -61,7 +74,7 @@ Arithmetic operators:
 (1 + 2) * 3^2
 ```
 
-Comparison operators:
+### Comparison operators
 
 - `==` (equal)
 - `!=` (not equal)
@@ -74,7 +87,7 @@ Comparison operators:
 100 >= 42
 ```
 
-Logical operators:
+### Logical operators
 
 - `not` (negation)
 - `and`
@@ -91,7 +104,7 @@ Non-boolean values are converted to booleans. The following result in `true`:
 - array with at least one item
 - map with at least one key/value pair
 
-String operators
+### String operators
 
 - Indexing, e.g. `foo[0]`
 - Slicing, e.g. `foo[1:2]`
@@ -105,7 +118,9 @@ Slices indexes are mandatory and _inclusive_. Indexes can be negative, e.g. `foo
 
 Any value concatenated with a string will result in a string. For example `"id" + 1` will result in `"id1"`.
 
-Array/slice operators
+There is no distinction between strings, bytes, or runes. Everything is treated as a string.
+
+### Array/slice operators
 
 - Indexing, e.g. `foo[1]`
 - Slicing, e.g. `foo[1:2]`
@@ -115,7 +130,7 @@ Array/slice operators
 
 Slices indexes are mandatory and _inclusive_. Indexes can be negative, e.g. `foo[-1]` selects the last item in the array.
 
-Map operators
+### Map operators
 
 - `in` (has key), e.g. `"key" in foo`
 
@@ -134,3 +149,12 @@ BenchmarkMexprCached-12      	 7066062	       166.4 ns/op	      32 B/op	       4
 BenchmarkLibExpr-12          	  110338	      9976 ns/op	    8146 B/op	      79 allocs/op
 BenchmarkLibExprCached-12    	 2816659	       432.6 ns/op	      96 B/op	       6 allocs/op
 ```
+
+## References
+
+These were a big help in understanding how Pratt parsers work:
+
+- https://dev.to/jrop/pratt-parsing
+- https://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/
+- https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html
+- https://www.oilshell.org/blog/2017/03/31.html

@@ -5,20 +5,37 @@ import (
 	"strings"
 )
 
+type InterpreterOption int
+
+const (
+	// StrictMode does extra checks like making sure identifiers exist.
+	StrictMode InterpreterOption = iota
+)
+
 // Interpreter executes expression AST programs.
 type Interpreter interface {
 	Run(value interface{}) (interface{}, Error)
 }
 
 // NewInterperter returns an interpreter for the given AST.
-func NewInterpreter(ast *Node) Interpreter {
+func NewInterpreter(ast *Node, options ...InterpreterOption) Interpreter {
+	strict := false
+
+	for _, opt := range options {
+		if opt == StrictMode {
+			strict = true
+		}
+	}
+
 	return &interpreter{
-		ast: ast,
+		ast:    ast,
+		strict: strict,
 	}
 }
 
 type interpreter struct {
-	ast *Node
+	ast    *Node
+	strict bool
 }
 
 func (i *interpreter) Run(value interface{}) (interface{}, Error) {
@@ -38,6 +55,9 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			}
 		}
 		if m, ok := value.(map[string]interface{}); ok {
+			if !i.strict {
+				return m[ast.Token.Value], nil
+			}
 			if v, ok := m[ast.Token.Value]; ok {
 				return v, nil
 			}
@@ -54,15 +74,13 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		if err != nil {
 			return nil, err
 		}
-		if !isSlice(resultLeft) {
-			return nil, NewError(ast.Token.Offset, "cannot index non-array %v", resultLeft)
+		if !isSlice(resultLeft) && !isString(resultLeft) {
+			return nil, NewError(ast.Token.Offset, "can only index strings or arrays but got %v", resultLeft)
 		}
 		resultRight, err := i.run(ast.Right, value)
 		if err != nil {
 			return nil, err
 		}
-		// TODO: handle negative indexes
-		left := resultLeft.([]interface{})
 		if isSlice(resultRight) {
 			start, err := toNumber(ast, resultRight.([]interface{})[0])
 			if err != nil {
@@ -72,23 +90,42 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			if err != nil {
 				return nil, err
 			}
-			if start < 0 {
-				start = float64(len(left) + int(start))
+			if left, ok := resultLeft.([]interface{}); ok {
+				if start < 0 {
+					start = float64(len(left) + int(start))
+				}
+				if end < 0 {
+					end = float64(len(left) + int(end))
+				}
+				return left[int(start) : int(end)+1], nil
+			} else {
+				left := toString(resultLeft)
+				if start < 0 {
+					start = float64(len(left) + int(start))
+				}
+				if end < 0 {
+					end = float64(len(left) + int(end))
+				}
+				return left[int(start) : int(end)+1], nil
 			}
-			if end < 0 {
-				end = float64(len(left) + int(end))
-			}
-			return left[int(start) : int(end)+1], nil
 		}
 		if isNumber(resultRight) {
 			idx, err := toNumber(ast, resultRight)
 			if err != nil {
 				return nil, err
 			}
-			if idx < 0 {
-				idx = float64(len(left) + int(idx))
+			if left, ok := resultLeft.([]interface{}); ok {
+				if idx < 0 {
+					idx = float64(len(left) + int(idx))
+				}
+				return left[int(idx)], nil
+			} else {
+				left := toString(resultLeft)
+				if idx < 0 {
+					idx = float64(len(left) + int(idx))
+				}
+				return string(left[int(idx)]), nil
 			}
-			return left[int(idx)], nil
 		}
 		return nil, NewError(ast.Token.Offset, "array index must be number or slice %v", resultRight)
 	case NodeSlice:

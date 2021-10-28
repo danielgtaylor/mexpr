@@ -43,7 +43,8 @@ func toNumber(ast *Node, v interface{}) (float64, Error) {
 }
 
 func isString(v interface{}) bool {
-	if _, ok := v.(string); ok {
+	switch v.(type) {
+	case string, rune, byte, []byte:
 		return true
 	}
 	return false
@@ -53,6 +54,10 @@ func toString(v interface{}) string {
 	switch s := v.(type) {
 	case string:
 		return s
+	case rune:
+		return string(s)
+	case byte:
+		return string(s)
 	case []byte:
 		return string(s)
 	}

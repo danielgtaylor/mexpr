@@ -28,8 +28,6 @@ const (
 	TokenOr            = "or"
 	TokenNot           = "not"
 	TokenStringCompare = "in"
-	TokenStartsWith    = "starts-with"
-	TokenEndsWith      = "ends-with"
 	TokenEOF           = "eof"
 )
 

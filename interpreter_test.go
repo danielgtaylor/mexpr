@@ -55,6 +55,9 @@ func TestInterpreter(t *testing.T) {
 		{expr: `"foo" + "bar" == "foobar"`, output: true},
 		{expr: `foo + "a"`, input: `{"foo": 1}`, output: "1a"},
 		{expr: `foo + bar`, input: `{"foo": "id", "bar": 1}`, output: "id1"},
+		{expr: `foo[0]`, input: `{"foo": "hello"}`, output: "h"},
+		{expr: `foo[-1]`, input: `{"foo": "hello"}`, output: "o"},
+		{expr: `foo[0:-3]`, input: `{"foo": "hello"}`, output: "hel"},
 		// Identifier / fields
 		{expr: "foo", input: `{"foo": 1.0}`, output: 1.0},
 		{expr: "foo.bar.baz", input: `{"foo": {"bar": {"baz": 1.0}}}`, output: 1.0},
@@ -98,13 +101,16 @@ func TestInterpreter(t *testing.T) {
 		// {expr: `foo.bar + "baz"`},
 		// {expr: `foo + 1`, input: `{"foo": [1, 2]}`},
 		// {expr: `foo[0]`, input: `{"foo": "hello"}`},
+		// {expr: "foo + 1"},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.expr, func(t *testing.T) {
 			var input map[string]interface{}
 			if tc.input != "" {
-				json.Unmarshal([]byte(tc.input), &input)
+				if err := json.Unmarshal([]byte(tc.input), &input); err != nil {
+					t.Fatal(err)
+				}
 			}
 			result, err := Eval(tc.expr, input)
 
@@ -119,13 +125,14 @@ func TestInterpreter(t *testing.T) {
 func BenchmarkMexpr(b *testing.B) {
 	b.ReportAllocs()
 	var r interface{}
+	input := map[string]interface{}{
+		"foo": map[string]interface{}{
+			"bar": 10.0,
+		},
+		"baz": "value",
+	}
 	for n := 0; n < b.N; n++ {
-		r, _ = Eval(`foo.bar / 2 * (2 + 4 / 2) == 20 and "v" in baz`, map[string]interface{}{
-			"foo": map[string]interface{}{
-				"bar": 10.0,
-			},
-			"baz": "value",
-		})
+		r, _ = Eval(`foo.bar / 2 * (2 + 4 / 2) == 20 and "v" in baz`, input)
 	}
 	assert.Equal(b, true, r)
 }
@@ -152,13 +159,14 @@ func BenchmarkMexprCached(b *testing.B) {
 // func BenchmarkLibExpr(b *testing.B) {
 // 	b.ReportAllocs()
 // 	var r interface{}
+// 	input := map[string]interface{}{
+// 		"foo": map[string]interface{}{
+// 			"bar": 10.0,
+// 		},
+// 		"baz": "value",
+// 	}
 // 	for n := 0; n < b.N; n++ {
-// 		r, _ = expr.Eval(`foo.bar / 2 * (2 + 4 / 2) == 20.0 && baz contains "v"`, map[string]interface{}{
-// 			"foo": map[string]interface{}{
-// 				"bar": 10.0,
-// 			},
-// 			"baz": "value",
-// 		})
+// 		r, _ = expr.Eval(`foo.bar / 2 * (2 + 4 / 2) == 20.0 && baz contains "v"`, input)
 // 	}
 // 	assert.Equal(b, true, r)
 // }
