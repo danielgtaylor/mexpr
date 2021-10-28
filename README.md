@@ -1,5 +1,7 @@
 # MicroExpr
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/danielgtaylor/mexpr.svg)](https://pkg.go.dev/github.com/danielgtaylor/mexpr) [![Go Report Card](https://goreportcard.com/badge/github.com/danielgtaylor/mexpr)](https://goreportcard.com/report/github.com/danielgtaylor/mexpr)
+
 A small & fast dependency-free library for parsing micro expressions.
 
 This library was originally built for use in templating languages (e.g. for-loop variable selection, if-statement evaluation) so is minimal in what it supports by design. If you need a more full-featured expression parser, check out [antonmedv/expr](https://github.com/antonmedv/expr) instead.
@@ -15,6 +17,8 @@ Features:
 - Useful error messages
 
 ## Usage
+
+Try it out on the [Go Playground](https://play.golang.org/p/Z0UcEBgfxu_r)!
 
 ```go
 import "github.com/danielgtaylor/mexpr"
@@ -139,15 +143,15 @@ Slices indexes are mandatory and _inclusive_. Indexes can be negative, e.g. `foo
 Performance compares favorably to [antonmedv/expr](https://github.com/antonmedv/expr) for both `Eval(...)` and cached program performance, which is expected given the more limited feature set. The example expression used is non-trivial: `foo.bar / 2 * (2 + 4 / 2) == 20 and "v" in baz`.
 
 ```
-$ go test -bench=. -benchmem
+$ go test -bench=. -benchtime=5s
 goos: darwin
 goarch: amd64
 pkg: github.com/danielgtaylor/mexpr
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
-BenchmarkMexpr-12            	  322903	      3592 ns/op	    2576 B/op	      53 allocs/op
-BenchmarkMexprCached-12      	 7066062	       166.4 ns/op	      32 B/op	       4 allocs/op
-BenchmarkLibExpr-12          	  110338	      9976 ns/op	    8146 B/op	      79 allocs/op
-BenchmarkLibExprCached-12    	 2816659	       432.6 ns/op	      96 B/op	       6 allocs/op
+BenchmarkMexpr-12            	 2288487      2590 ns/op	    1064 B/op	      33 allocs/op
+BenchmarkMexprCached-12      	33290458       177.8 ns/op	      32 B/op	       4 allocs/op
+BenchmarkLibExpr-12          	  621049      9300 ns/op	    7474 B/op	      75 allocs/op
+BenchmarkLibExprCached-12    	14324178       412.1 ns/op	      96 B/op	       6 allocs/op
 ```
 
 ## References
