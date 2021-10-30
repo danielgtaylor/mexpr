@@ -208,5 +208,5 @@ func (i *typeChecker) run(ast *Node, value interface{}) (*schema, Error) {
 		}
 		return schemaBool, nil
 	}
-	return nil, nil
+	return nil, NewError(ast.Offset, "unexpected node")
 }

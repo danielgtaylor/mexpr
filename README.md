@@ -15,7 +15,12 @@ Features:
   - Easy to read
   - No hiding complex branching logic in expressions
 - Intuitive, e.g. `"id" + 1` => `"id1"`
-- Useful error messages
+- Useful error messages, example:
+  ```
+  missing right operand
+    not (1- <= 5)
+    ......^
+  ```
 
 ## Usage
 
@@ -49,6 +54,16 @@ result2, err := interpreter.Run(map[string]interfae{}{
 	"a": 150,
 	"b": 30,
 })
+```
+
+Pretty errors use the passed-in input along with the error's offset to display an arrow of where within the expression the error occurs.
+
+```go
+inputStr := "2 * foo"
+_, err := mexpr.Eval(inputStr, nil)
+if err != nil {
+	fmt.Println(err.Pretty(inputStr))
+}
 ```
 
 ## Syntax

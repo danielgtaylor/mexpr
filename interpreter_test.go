@@ -2,6 +2,7 @@ package mexpr
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,6 +12,7 @@ func TestInterpreter(t *testing.T) {
 	type test struct {
 		expr   string
 		input  string
+		err    string
 		output interface{}
 	}
 	cases := []test{
@@ -72,6 +74,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: "foo[1:1 + 2]", input: `{"foo": [1, 2, 3, 4]}`, output: []interface{}{2.0, 3.0, 4.0}},
 		{expr: "foo[foo[0]:bar.baz * 1^2]", input: `{"foo": [1, 2, 3, 4], "bar": {"baz": 3}}`, output: []interface{}{2.0, 3.0, 4.0}},
 		{expr: "foo + bar", input: `{"foo": [1, 2], "bar": [3, 4]}`, output: []interface{}{1.0, 2.0, 3.0, 4.0}},
+		{expr: "foo[bar]", input: `{"foo": [1, 2, 3], "bar": [0, 1]}`, output: []interface{}{1.0, 2.0}},
 		// In
 		{expr: `"foo" in "foobar"`, output: true},
 		{expr: `"foo" in bar`, input: `{"bar": ["foo", "other"]}`, output: true},
@@ -98,11 +101,15 @@ func TestInterpreter(t *testing.T) {
 		{expr: "(1 + 2) * 3", output: 9.0},
 		{expr: "6 / 3 + 2 * 5", output: 12.0},
 		// failure
-		// {expr: "6 -"},
-		// {expr: `foo.bar + "baz"`, input: `{"foo": 1}`},
-		// {expr: `foo + 1`, input: `{"foo": [1, 2]}`},
-		// {expr: `foo[0] / 2`, input: `{"foo": "hello"}`},
-		// {expr: "foo + 1"},
+		{expr: "foo + 1", input: `{}`, err: "no property foo"},
+		{expr: "6 -", err: "incomplete expression"},
+		{expr: `foo.bar + "baz"`, input: `{"foo": 1}`, err: "no property bar"},
+		{expr: `foo + 1`, input: `{"foo": [1, 2]}`, err: "cannot operate on incompatible types"},
+		{expr: `foo[1-]`, input: `{"foo": "hello"}`, err: "missing right operand"},
+		{expr: `not (1- <= 5)`, err: "missing right operand"},
+		{expr: `(1 >=)`, err: "missing right operand"},
+		{expr: `foo[bar]`, input: `{"foo": [1, 2, 3], "bar": true}`, err: "array index must be number or slice"},
+		{expr: `1 < "foo"`, err: "unable to convert to number"},
 	}
 
 	for _, tc := range cases {
@@ -114,12 +121,31 @@ func TestInterpreter(t *testing.T) {
 				}
 			}
 			ast, err := Parse(tc.expr, input)
-			assert.NoError(t, err)
-			result, err := Run(ast, input)
-			if err != nil {
-				t.Fatal(err.Pretty(tc.expr))
+
+			if tc.err != "" {
+				if err != nil {
+					if strings.Contains(err.Error(), tc.err) {
+						return
+					}
+					t.Fatal(err.Pretty(tc.expr))
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err.Pretty(tc.expr))
+				}
 			}
-			assert.Equal(t, tc.output, result)
+			result, err := Run(ast, input)
+			if tc.err != "" {
+				if strings.Contains(err.Error(), tc.err) {
+					return
+				}
+				t.Fatal(err.Pretty(tc.expr))
+			} else {
+				if err != nil {
+					t.Fatal(err.Pretty(tc.expr))
+				}
+				assert.Equal(t, tc.output, result)
+			}
 		})
 	}
 }

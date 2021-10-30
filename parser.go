@@ -215,6 +215,9 @@ func (p *parser) newNodeParseRight(left *Node, t *Token, typ NodeType, bindingPo
 	if err != nil {
 		return nil, err
 	}
+	if right == nil {
+		return nil, NewError(t.Offset, "missing right operand")
+	}
 	return &Node{Type: typ, Offset: offset, Left: left, Right: right}, nil
 }
 
@@ -248,6 +251,9 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 		right, err := p.parse(binding)
 		if err != nil {
 			return nil, err
+		}
+		if right == nil {
+			return nil, NewError(t.Offset, "missing right operand")
 		}
 		if n.Type == NodeLiteral && right.Type == NodeLiteral {
 			if !(isString(n.Value) || isString(right.Value)) {
@@ -298,7 +304,7 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 		}
 		return p.newNodeParseRight(n, t, NodeSlice, bindingPowers[t.Type])
 	}
-	return nil, nil
+	return nil, NewError(t.Offset, "unexpected token %s", t.Type)
 }
 
 func (p *parser) Parse() (*Node, Error) {
