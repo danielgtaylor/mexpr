@@ -293,6 +293,9 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 		n, err := p.newNodeParseRight(n, t, NodeArrayIndex, 0)
 		return p.ensure(n, err, TokenRightBracket)
 	case TokenSlice:
+		if p.token.Type == TokenRightBracket {
+			return &Node{Type: NodeSlice, Offset: t.Offset, Left: n, Right: &Node{Type: NodeLiteral, Offset: t.Offset, Value: -1.0}}, nil
+		}
 		return p.newNodeParseRight(n, t, NodeSlice, bindingPowers[t.Type])
 	}
 	return nil, nil

@@ -114,14 +114,14 @@ Non-boolean values are converted to booleans. The following result in `true`:
 ### String operators
 
 - Indexing, e.g. `foo[0]`
-- Slicing, e.g. `foo[1:2]`
+- Slicing, e.g. `foo[1:2]` or `foo[2:]`
 - `.length` pseudo-property, e.g. `foo.length`
 - `+` (concatenation)
 - `in` e.g. `"f" in "foo"`
 - `startsWith` e.g. `"foo" startsWith "f"`
 - `endsWith` e.g. `"foo" endsWith "o"`
 
-Slice indexes are mandatory and _inclusive_. Indexes can be negative, e.g. `foo[-1]` selects the last item in the array.
+Indexes are zero-based. Slice indexes are optional and are _inclusive_. `foo[1:2]` returns `el` if the `foo` is `hello`. Indexes can be negative, e.g. `foo[-1]` selects the last item in the array.
 
 Any value concatenated with a string will result in a string. For example `"id" + 1` will result in `"id1"`.
 
@@ -130,12 +130,12 @@ There is no distinction between strings, bytes, or runes. Everything is treated 
 ### Array/slice operators
 
 - Indexing, e.g. `foo[1]`
-- Slicing, e.g. `foo[1:2]`
+- Slicing, e.g. `foo[1:2]` or `foo[2:]`
 - `.length` pseudo-property, e.g. `foo.length`
 - `+` (concatenation)
 - `in` (has item), e.g. `1 in foo`
 
-Slice indexes are mandatory and _inclusive_. Indexes can be negative, e.g. `foo[-1]` selects the last item in the array.
+Indexes are zero-based. Slice indexes are optional and are _inclusive_. `foo[1:2]` returns `[2, 3]` if the `foo` is `[1, 2, 3, 4]`. Indexes can be negative, e.g. `foo[-1]` selects the last item in the array.
 
 ### Map operators
 
