@@ -22,12 +22,8 @@ func Parse(expression string, types map[string]interface{}) (*Node, Error) {
 // TypeCheck will take a parsed AST and type check against the given input
 // structure with representative example values.
 func TypeCheck(ast *Node, types map[string]interface{}) Error {
-	i := NewInterpreter(ast, StrictMode)
-	_, err := i.Run(types)
-	if err != nil {
-		return err
-	}
-	return nil
+	i := NewTypeChecker(ast)
+	return i.Run(types)
 }
 
 // Run executes an AST with the given input and returns the output.

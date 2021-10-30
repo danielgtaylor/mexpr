@@ -98,9 +98,9 @@ func TestInterpreter(t *testing.T) {
 		{expr: "6 / 3 + 2 * 5", output: 12.0},
 		// failure
 		// {expr: "6 -"},
-		// {expr: `foo.bar + "baz"`},
+		// {expr: `foo.bar + "baz"`, input: `{"foo": 1}`},
 		// {expr: `foo + 1`, input: `{"foo": [1, 2]}`},
-		// {expr: `foo[0]`, input: `{"foo": "hello"}`},
+		// {expr: `foo[0] / 2`, input: `{"foo": "hello"}`},
 		// {expr: "foo + 1"},
 	}
 
@@ -112,8 +112,9 @@ func TestInterpreter(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			result, err := Eval(tc.expr, input)
-
+			ast, err := Parse(tc.expr, input)
+			assert.NoError(t, err)
+			result, err := Run(ast, input)
 			if err != nil {
 				t.Fatal(err.Pretty(tc.expr))
 			}
@@ -132,7 +133,9 @@ func BenchmarkMexpr(b *testing.B) {
 		"baz": "value",
 	}
 	for n := 0; n < b.N; n++ {
-		r, _ = Eval(`foo.bar / 2 * (2 + 4 / 2) == 20 and "v" in baz`, input)
+		ast, err := Parse(`foo.bar / 2 * (2 + 4 / 2) == 20 and "v" in baz`, input)
+		assert.NoError(b, err)
+		r, _ = Run(ast, input, StrictMode)
 	}
 	assert.Equal(b, true, r)
 }
@@ -140,15 +143,15 @@ func BenchmarkMexpr(b *testing.B) {
 func BenchmarkMexprCached(b *testing.B) {
 	b.ReportAllocs()
 	var r interface{}
-	ast, err := Parse(`foo.bar / 2 * (2 + 4 / 2) == 20 and "v" in baz`, nil)
-	assert.NoError(b, err)
-	i := NewInterpreter(ast)
 	input := map[string]interface{}{
 		"foo": map[string]interface{}{
 			"bar": 10.0,
 		},
 		"baz": "value",
 	}
+	ast, err := Parse(`foo.bar / 2 * (2 + 4 / 2) == 20 and "v" in baz`, input)
+	assert.NoError(b, err)
+	i := NewInterpreter(ast)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		r, _ = i.Run(input)
@@ -188,4 +191,54 @@ func BenchmarkMexprCached(b *testing.B) {
 // 		assert.NoError(b, err)
 // 	}
 // 	assert.Equal(b, true, r)
+// }
+
+// func BenchmarkDCExpr(b *testing.B) {
+// 	b.ReportAllocs()
+// 	compiler := dcexpr.NewCompiler()
+// 	values := []runtime.Value{}
+// 	values = append(values, runtime.NewNumber(10.0))
+// 	compiler.RegisterInput("bar", types.Number)
+// 	values = append(values, runtime.NewString("value"))
+// 	compiler.RegisterInput("baz", types.String)
+
+// 	err := compiler.RegisterFunc("contains", func(ctx context.Context, args []runtime.Value) runtime.Value {
+// 		return runtime.NewBool(strings.Contains(args[0].String(), args[1].String()))
+// 	}, types.Bool, types.String, types.String)
+// 	assert.NoError(b, err)
+
+// 	var res runtime.Value
+// 	for i := 0; i < b.N; i++ {
+// 		prog, err := compiler.Compile(`bar / 2 * (2 + 4 / 2) == 20 && contains(baz, "v")`)
+// 		assert.NoError(b, err)
+// 		run := runtime.NewRuntime(prog)
+// 		res, err = run.Run(context.Background(), 0, values)
+// 		assert.NoError(b, err)
+// 	}
+// 	assert.Equal(b, true, res.Bool())
+// }
+
+// func BenchmarkDCExprCached(b *testing.B) {
+// 	b.ReportAllocs()
+// 	compiler := dcexpr.NewCompiler()
+// 	values := []runtime.Value{}
+// 	values = append(values, runtime.NewNumber(10.0))
+// 	compiler.RegisterInput("bar", types.Number)
+// 	values = append(values, runtime.NewString("value"))
+// 	compiler.RegisterInput("baz", types.String)
+
+// 	err := compiler.RegisterFunc("contains", func(ctx context.Context, args []runtime.Value) runtime.Value {
+// 		return runtime.NewBool(strings.Contains(args[0].String(), args[1].String()))
+// 	}, types.Bool, types.String, types.String)
+// 	assert.NoError(b, err)
+
+// 	prog, err := compiler.Compile(`bar / 2 * (2 + 4 / 2) == 20 && contains(baz, "v")`)
+// 	assert.NoError(b, err)
+// 	run := runtime.NewRuntime(prog)
+
+// 	var res runtime.Value
+// 	for i := 0; i < b.N; i++ {
+// 		res, _ = run.Run(context.Background(), 0, values)
+// 	}
+// 	assert.Equal(b, true, res.Bool())
 // }
