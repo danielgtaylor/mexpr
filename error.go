@@ -6,6 +6,9 @@ import "fmt"
 type Error interface {
 	Error() string
 
+	// Offset returns the character offset of the error within the experssion.
+	Offset() int
+
 	// Pretty prints out a message with a pointer to the source location of the
 	// error.
 	Pretty(source string) string
@@ -18,6 +21,10 @@ type exprErr struct {
 
 func (e *exprErr) Error() string {
 	return e.message
+}
+
+func (e *exprErr) Offset() int {
+	return e.offset
 }
 
 func (e *exprErr) Pretty(source string) string {
