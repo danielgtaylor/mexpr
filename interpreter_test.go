@@ -50,6 +50,8 @@ func TestInterpreter(t *testing.T) {
 		// Negation
 		{expr: "not (1 < 2)", output: false},
 		{expr: "not (1 < 2) and (3 < 4)", output: false},
+		{expr: "not foo.bar", input: `{"foo": {"bar": true}}`, output: false},
+		{expr: "not foo[0].bar", input: `{"foo": [{"bar": true}]}`, output: false},
 		// Strings
 		{expr: `"foo" == "foo"`, output: true},
 		{expr: `"foo" == "bar"`, output: false},
