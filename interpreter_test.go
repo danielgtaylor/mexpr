@@ -20,7 +20,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: "1 + 2 - 3", output: 0.0},
 		{expr: "-1 + +3", output: 2.0},
 		{expr: "-1 + -3 - -4", output: 0.0},
-		{expr: `0.5 + 0.2"`, output: 0.7},
+		{expr: `0.5 + 0.2`, output: 0.7},
 		{expr: `.5 + .2`, output: 0.7},
 		// Mul/div
 		{expr: "4 * 5 / 10", output: 2.0},
@@ -107,11 +107,15 @@ func TestInterpreter(t *testing.T) {
 		{expr: "6 -", err: "incomplete expression"},
 		{expr: `foo.bar + "baz"`, input: `{"foo": 1}`, err: "no property bar"},
 		{expr: `foo + 1`, input: `{"foo": [1, 2]}`, err: "cannot operate on incompatible types"},
-		{expr: `foo[1-]`, input: `{"foo": "hello"}`, err: "missing right operand"},
+		{expr: `foo[1-]`, input: `{"foo": "hello"}`, err: "unexpected right-bracket"},
 		{expr: `not (1- <= 5)`, err: "missing right operand"},
-		{expr: `(1 >=)`, err: "missing right operand"},
+		{expr: `(1 >=)`, err: "unexpected right-paren"},
 		{expr: `foo[bar]`, input: `{"foo": [1, 2, 3], "bar": true}`, err: "array index must be number or slice"},
 		{expr: `1 < "foo"`, err: "unable to convert to number"},
+		{expr: `1 <`, err: "incomplete expression"},
+		{expr: `1 +`, err: "incomplete expression"},
+		{expr: `1 ]`, err: "expected eof but found right-bracket"},
+		{expr: `0.5 + 1"`, err: "expected eof but found string"},
 	}
 
 	for _, tc := range cases {
@@ -138,6 +142,9 @@ func TestInterpreter(t *testing.T) {
 			}
 			result, err := Run(ast, input)
 			if tc.err != "" {
+				if err == nil {
+					t.Fatal("expected error but found none")
+				}
 				if strings.Contains(err.Error(), tc.err) {
 					return
 				}

@@ -201,6 +201,10 @@ func (p *parser) nud(t *Token) (*Node, Error) {
 		}
 		// Create a dummy left node with value 0, the start of the slice.
 		return &Node{Type: NodeSlice, Offset: offset, Left: &Node{Type: NodeLiteral, Value: 0.0, Offset: offset}, Right: result}, nil
+	case TokenRightParen:
+		return nil, NewError(p.token.Offset, "unexpected right-paren")
+	case TokenRightBracket:
+		return nil, NewError(p.token.Offset, "unexpected right-bracket")
 	case TokenEOF:
 		return nil, NewError(p.token.Offset, "incomplete expression, EOF found")
 	}
@@ -309,5 +313,6 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 
 func (p *parser) Parse() (*Node, Error) {
 	p.advance()
-	return p.parse(0)
+	n, err := p.parse(0)
+	return p.ensure(n, err, TokenEOF)
 }
