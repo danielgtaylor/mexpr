@@ -9,7 +9,8 @@ This library was originally built for use in templating languages (e.g. for-loop
 Features:
 
 - Fast, low-allocation parser and runtime
-- Type checking
+  - Many simple expressions are zero-allocation
+- Type checking during parsing
 - Simple
   - Easy to learn
   - Easy to read
@@ -24,24 +25,24 @@ Features:
 
 ## Usage
 
-Try it out on the [Go Playground](https://play.golang.org/p/Z0UcEBgfxu_r)!
+Try it out on the [Go Playground](https://play.golang.org/p/Z0UcEBgfxu_r)! You can find many [example expressions in the tests](https://github.com/danielgtaylor/mexpr/blob/main/interpreter_test.go#L18).
 
 ```go
 import "github.com/danielgtaylor/mexpr"
 
 // Convenience for lexing/parsing/running in one step:
-result, err := mexpr.Eval("a + b", map[string]interface{}{
-	"a": 1,
-	"b": 2,
+result, err := mexpr.Eval("a > b", map[string]interface{}{
+	"a": 2,
+	"b": 1,
 })
 
 // Manual method with type checking and fast AST re-use. Error handling is
 // omitted for brevity.
-l := mexpr.NewLexer("a + b")
+l := mexpr.NewLexer("a > b")
 p := mexpr.NewParser(l)
 ast, err := mexpr.Parse()
 typeExamples = map[string]interface{}{
-	"a": 1,
+	"a": 2,
 	"b": 1,
 }
 err := mexpr.TypeCheck(ast, typeExamples)
@@ -71,7 +72,7 @@ if err != nil {
 ### Literals
 
 - **strings** double quoted e.g. `"hello"`
-- **numbers** e.g. `123`, `2.5`
+- **numbers** e.g. `123`, `2.5`, `1_000_000`
 
 Internally all numbers are treated as `float64`, which means fewer conversions/casts when taking arbitrary JSON/YAML inputs.
 
@@ -158,19 +159,58 @@ Indexes are zero-based. Slice indexes are optional and are _inclusive_. `foo[1:2
 
 ## Performance
 
-Performance compares favorably to [antonmedv/expr](https://github.com/antonmedv/expr) for both `Eval(...)` and cached program performance, which is expected given the more limited feature set. The example expression used is non-trivial: `foo.bar / 2 * (2 + 4 / 2) == 20 and "v" in baz`.
+Performance compares favorably to [antonmedv/expr](https://github.com/antonmedv/expr) for both `Eval(...)` and cached program performance, which is expected given the more limited feature set. The `slow` benchmarks include lexing/parsing/interpreting while the `cached` ones are just the interpreting step. The `complex` example expression used is non-trivial: `foo.bar / (1 * 1024 * 1024) >= 1.0 and "v" in baz and baz.length > 3 and arr[2:].length == 1`.
 
 ```
-$ go test -bench=. -benchtime=5s
 goos: darwin
 goarch: amd64
 pkg: github.com/danielgtaylor/mexpr
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
-BenchmarkMexpr-12             378998      2988 ns/op    1360 B/op    37 allocs/op
-BenchmarkMexprCached-12      9591484     120.9 ns/op      16 B/op     2 allocs/op
-BenchmarkLibExpr-12           621049      9300 ns/op    7474 B/op    75 allocs/op
-BenchmarkLibExprCached-12   14324178     412.1 ns/op      96 B/op     6 allocs/op
+Benchmark/mexpr-field-slow-12           3673572       286.5 ns/op    144 B/op      6 allocs/op
+Benchmark/_expr-field-slow-12            956689      1276 ns/op     1096 B/op     23 allocs/op
+
+Benchmark/mexpr-comparison-slow-12      1000000      1020 ns/op      656 B/op     16 allocs/op
+Benchmark/_expr-comparison-slow-12       383491      3069 ns/op     2224 B/op     38 allocs/op
+
+Benchmark/mexpr-logical-slow-12         1000000      1063 ns/op      464 B/op     17 allocs/op
+Benchmark/_expr-logical-slow-12          292824      4148 ns/op     2336 B/op     38 allocs/op
+
+Benchmark/mexpr-math-slow-12            1000000      1035 ns/op      656 B/op     16 allocs/op
+Benchmark/_expr-math-slow-12             399708      3004 ns/op     2184 B/op     38 allocs/op
+
+Benchmark/mexpr-string-slow-12          1822945       655.6 ns/op    258 B/op     10 allocs/op
+Benchmark/_expr-string-slow-12           428604      2508 ns/op     1640 B/op     35 allocs/op
+
+Benchmark/mexpr-index-slow-12           2015856       592.0 ns/op    280 B/op     10 allocs/op
+Benchmark/_expr-index-slow-12            517360      2301 ns/op     1872 B/op     30 allocs/op
+
+Benchmark/mexpr-complex-slow-12          244039      5078 ns/op     2232 B/op     64 allocs/op
+Benchmark/_expr-complex-slow-12           69387     16825 ns/op    14378 B/op    107 allocs/op
+
+Benchmark/mexpr-field-cached-12       100000000        11.37 ns/op     0 B/op      0 allocs/op
+Benchmark/_expr-field-cached-12         7761153       146.5 ns/op     48 B/op      2 allocs/op
+
+Benchmark/mexpr-comparison-cached-12   38098502        30.93 ns/op     0 B/op      0 allocs/op
+Benchmark/_expr-comparison-cached-12    4563463       251.0 ns/op     64 B/op      3 allocs/op
+
+Benchmark/mexpr-logical-cached-12      37563720        31.35 ns/op     0 B/op      0 allocs/op
+Benchmark/_expr-logical-cached-12      11000991       105.9 ns/op     32 B/op      1 allocs/op
+
+Benchmark/mexpr-math-cached-12         24463279        47.41 ns/op     8 B/op      1 allocs/op
+Benchmark/_expr-math-cached-12          4531693       268.0 ns/op     72 B/op      4 allocs/op
+
+Benchmark/mexpr-string-cached-12       43399368        26.83 ns/op     0 B/op      0 allocs/op
+Benchmark/_expr-string-cached-12        7302940       162.0 ns/op     48 B/op      2 allocs/op
+
+Benchmark/mexpr-index-cached-12        45289230        25.67 ns/op     0 B/op      0 allocs/op
+Benchmark/_expr-index-cached-12         6057562       180.0 ns/op     48 B/op      2 allocs/op
+
+Benchmark/mexpr-complex-cached-12       4271955       278.7 ns/op     40 B/op      3 allocs/op
+Benchmark/_expr-complex-cached-12       1456266       818.7 ns/op    208 B/op      9 allocs/op
+
 ```
+
+On average mexpr is around 3-10x faster for both full parsing and cached performance.
 
 ## References
 

@@ -7,7 +7,10 @@ type Error interface {
 	Error() string
 
 	// Offset returns the character offset of the error within the experssion.
-	Offset() int
+	Offset() uint16
+
+	// Length returns the length in bytes after the offset where the error ends.
+	Length() uint8
 
 	// Pretty prints out a message with a pointer to the source location of the
 	// error.
@@ -15,7 +18,8 @@ type Error interface {
 }
 
 type exprErr struct {
-	offset  int
+	offset  uint16
+	length  uint8
 	message string
 }
 
@@ -23,23 +27,30 @@ func (e *exprErr) Error() string {
 	return e.message
 }
 
-func (e *exprErr) Offset() int {
+func (e *exprErr) Offset() uint16 {
 	return e.offset
+}
+
+func (e *exprErr) Length() uint8 {
+	return e.length
 }
 
 func (e *exprErr) Pretty(source string) string {
 	msg := e.Error() + "\n" + source + "\n"
-	for i := 0; i < e.offset; i++ {
+	for i := uint16(0); i < e.offset; i++ {
 		msg += "."
 	}
-	msg += "^"
+	for i := uint8(0); i < e.length; i++ {
+		msg += "^"
+	}
 	return msg
 }
 
 // NewError creates a new error at a specific location.
-func NewError(offset int, format string, a ...interface{}) Error {
+func NewError(offset uint16, length uint8, format string, a ...interface{}) Error {
 	return &exprErr{
 		offset:  offset,
+		length:  length,
 		message: fmt.Sprintf(format, a...),
 	}
 }

@@ -50,10 +50,10 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		if ast.Value.(string) == "length" {
 			// Special pseudo-property to get the value's length.
 			if s, ok := value.(string); ok {
-				return float64(len(s)), nil
+				return len(s), nil
 			}
 			if a, ok := value.([]interface{}); ok {
-				return float64(len(a)), nil
+				return len(a), nil
 			}
 		}
 		if m, ok := value.(map[string]interface{}); ok {
@@ -64,7 +64,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 				return v, nil
 			}
 		}
-		return nil, NewError(ast.Offset, "cannot get %v from %v", ast.Value, value)
+		return nil, NewError(ast.Offset, ast.Length, "cannot get %v from %v", ast.Value, value)
 	case NodeFieldSelect:
 		leftValue, err := i.run(ast.Left, value)
 		if err != nil {
@@ -77,7 +77,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			return nil, err
 		}
 		if !isSlice(resultLeft) && !isString(resultLeft) {
-			return nil, NewError(ast.Offset, "can only index strings or arrays but got %v", resultLeft)
+			return nil, NewError(ast.Offset, ast.Length, "can only index strings or arrays but got %v", resultLeft)
 		}
 		resultRight, err := i.run(ast.Right, value)
 		if err != nil {
@@ -94,19 +94,19 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			}
 			if left, ok := resultLeft.([]interface{}); ok {
 				if start < 0 {
-					start = float64(len(left) + int(start))
+					start += float64(len(left))
 				}
 				if end < 0 {
-					end = float64(len(left) + int(end))
+					end += float64(len(left))
 				}
 				return left[int(start) : int(end)+1], nil
 			}
 			left := toString(resultLeft)
 			if start < 0 {
-				start = float64(len(left) + int(start))
+				start += float64(len(left))
 			}
 			if end < 0 {
-				end = float64(len(left) + int(end))
+				end += float64(len(left))
 			}
 			return left[int(start) : int(end)+1], nil
 		}
@@ -117,17 +117,17 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			}
 			if left, ok := resultLeft.([]interface{}); ok {
 				if idx < 0 {
-					idx = float64(len(left) + int(idx))
+					idx += float64(len(left))
 				}
 				return left[int(idx)], nil
 			}
 			left := toString(resultLeft)
 			if idx < 0 {
-				idx = float64(len(left) + int(idx))
+				idx += float64(len(left))
 			}
 			return string(left[int(idx)]), nil
 		}
-		return nil, NewError(ast.Offset, "array index must be number or slice %v", resultRight)
+		return nil, NewError(ast.Offset, ast.Length, "array index must be number or slice %v", resultRight)
 	case NodeSlice:
 		resultLeft, err := i.run(ast.Left, value)
 		if err != nil {
@@ -137,7 +137,9 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		if err != nil {
 			return nil, err
 		}
-		return []interface{}{resultLeft, resultRight}, nil
+		ast.Value.([]interface{})[0] = resultLeft
+		ast.Value.([]interface{})[1] = resultRight
+		return ast.Value, nil
 	case NodeLiteral:
 		return ast.Value, nil
 	case NodeSign:
@@ -153,7 +155,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			right = -right
 		}
 		return right, nil
-	case NodeAdd, NodeSubtract, NodeMultiply, NodeDivide, NodePower:
+	case NodeAdd, NodeSubtract, NodeMultiply, NodeDivide, NodeModulus, NodePower:
 		resultLeft, err := i.run(ast.Left, value)
 		if err != nil {
 			return nil, err
@@ -172,11 +174,11 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			}
 		}
 		if isNumber(resultLeft) && isNumber(resultRight) {
-			left, err := toNumber(ast, resultLeft)
+			left, err := toNumber(ast.Left, resultLeft)
 			if err != nil {
 				return nil, err
 			}
-			right, err := toNumber(ast, resultRight)
+			right, err := toNumber(ast.Right, resultRight)
 			if err != nil {
 				return nil, err
 			}
@@ -188,14 +190,17 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			case NodeMultiply:
 				return left * right, nil
 			case NodeDivide:
+				if right == 0.0 {
+					return nil, NewError(ast.Offset, ast.Length, "cannot divide by zero")
+				}
 				return left / right, nil
 			case NodeModulus:
-				return float64(int(left) % int(right)), nil
+				return int(left) % int(right), nil
 			case NodePower:
 				return math.Pow(left, right), nil
 			}
 		}
-		return nil, NewError(ast.Offset, "cannot add incompatible types %v and %v", resultLeft, resultRight)
+		return nil, NewError(ast.Offset, ast.Length, "cannot add incompatible types %v and %v", resultLeft, resultRight)
 	case NodeEqual, NodeNotEqual, NodeLessThan, NodeLessThanEqual, NodeGreaterThan, NodeGreaterThanEqual:
 		resultLeft, err := i.run(ast.Left, value)
 		if err != nil {
@@ -206,17 +211,17 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			return nil, err
 		}
 		if ast.Type == NodeEqual {
-			return resultLeft == resultRight, nil
+			return normalize(resultLeft) == normalize(resultRight), nil
 		}
 		if ast.Type == NodeNotEqual {
-			return resultLeft != resultRight, nil
+			return normalize(resultLeft) != normalize(resultRight), nil
 		}
 
-		left, err := toNumber(ast, resultLeft)
+		left, err := toNumber(ast.Left, resultLeft)
 		if err != nil {
 			return nil, err
 		}
-		right, err := toNumber(ast, resultRight)
+		right, err := toNumber(ast.Right, resultRight)
 		if err != nil {
 			return nil, err
 		}

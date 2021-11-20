@@ -22,8 +22,10 @@ func TestInterpreter(t *testing.T) {
 		{expr: "-1 + -3 - -4", output: 0.0},
 		{expr: `0.5 + 0.2`, output: 0.7},
 		{expr: `.5 + .2`, output: 0.7},
+		{expr: `1_000_000 + 1`, output: 1000001.0},
 		// Mul/div
 		{expr: "4 * 5 / 10", output: 2.0},
+		{expr: `19 % x`, input: `{"x": 5}`, output: 4},
 		// Power
 		{expr: "2^3", output: 8.0},
 		{expr: "2^3^2", output: 512.0},
@@ -41,6 +43,8 @@ func TestInterpreter(t *testing.T) {
 		{expr: "1 == 2", output: false},
 		{expr: "1 != 1", output: false},
 		{expr: "1 != 2", output: true},
+		{expr: "x.length == 3", input: `{"x": "abc"}`, output: true},
+		{expr: `19 % 5 == 4`, output: true},
 		// Boolean comparisons
 		{expr: "1 < 2 and 1 > 2", output: false},
 		{expr: "1 < 2 and 2 > 1", output: true},
@@ -94,9 +98,9 @@ func TestInterpreter(t *testing.T) {
 		{expr: `"foo" endsWith "o"`, output: true},
 		{expr: `"id1" endsWith 1`, output: true},
 		// Length
-		{expr: `"foo".length`, output: 3.0},
-		{expr: `str.length`, input: `{"str": "abcdef"}`, output: 6.0},
-		{expr: `arr.length`, input: `{"arr": [1, 2]}`, output: 2.0},
+		{expr: `"foo".length`, output: 3},
+		{expr: `str.length`, input: `{"str": "abcdef"}`, output: 6},
+		{expr: `arr.length`, input: `{"arr": [1, 2]}`, output: 2},
 		// Order of operations
 		{expr: "1 + 2 + 3", output: 6.0},
 		{expr: "1 + 2 * 3", output: 7.0},
@@ -110,12 +114,15 @@ func TestInterpreter(t *testing.T) {
 		{expr: `foo[1-]`, input: `{"foo": "hello"}`, err: "unexpected right-bracket"},
 		{expr: `not (1- <= 5)`, err: "missing right operand"},
 		{expr: `(1 >=)`, err: "unexpected right-paren"},
-		{expr: `foo[bar]`, input: `{"foo": [1, 2, 3], "bar": true}`, err: "array index must be number or slice"},
+		{expr: `foo[foo[0] != bar]`, input: `{"foo": [1, 2, 3], "bar": true}`, err: "array index must be number or slice"},
 		{expr: `1 < "foo"`, err: "unable to convert to number"},
 		{expr: `1 <`, err: "incomplete expression"},
 		{expr: `1 +`, err: "incomplete expression"},
 		{expr: `1 ]`, err: "expected eof but found right-bracket"},
 		{expr: `0.5 + 1"`, err: "expected eof but found string"},
+		{expr: `0.5 > "some kind of string"`, err: "unable to convert to number"},
+		{expr: `foo beginswith "bar"`, input: `{"foo": "bar"}`, err: "expected eof"},
+		{expr: `1 / (foo * 1)`, input: `{"foo": 0}`, err: "cannot divide by zero"},
 	}
 
 	for _, tc := range cases {

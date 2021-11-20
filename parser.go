@@ -6,7 +6,7 @@ import (
 )
 
 // NodeType defines the type of the abstract syntax tree node.
-type NodeType int
+type NodeType uint8
 
 // Possible node types
 const (
@@ -40,10 +40,80 @@ const (
 // Node is a unit of the binary tree that makes up the abstract syntax tree.
 type Node struct {
 	Type   NodeType
-	Value  interface{}
-	Offset int
+	Length uint8
+	Offset uint16
 	Left   *Node
 	Right  *Node
+	Value  interface{}
+}
+
+// String converts the node to a string representation (basically the node name
+// or the node's value for identifiers/literals).
+func (n Node) String() string {
+	switch n.Type {
+	case NodeIdentifier, NodeLiteral:
+		return toString(n.Value)
+	case NodeAdd:
+		return "+"
+	case NodeSubtract:
+		return "-"
+	case NodeMultiply:
+		return "*"
+	case NodeDivide:
+		return "/"
+	case NodeModulus:
+		return "%"
+	case NodePower:
+		return "^"
+	case NodeEqual:
+		return "=="
+	case NodeNotEqual:
+		return "!="
+	case NodeLessThan:
+		return "<"
+	case NodeLessThanEqual:
+		return "<="
+	case NodeGreaterThan:
+		return ">"
+	case NodeGreaterThanEqual:
+		return ">="
+	case NodeAnd:
+		return "and"
+	case NodeOr:
+		return "or"
+	case NodeNot:
+		return "not"
+	case NodeFieldSelect:
+		return "."
+	case NodeArrayIndex:
+		return "[]"
+	case NodeSlice:
+		return ":"
+	case NodeIn:
+		return "in"
+	case NodeStartsWith:
+		return "startsWith"
+	case NodeEndsWith:
+		return "endsWith"
+	}
+
+	return ""
+}
+
+// Dot returns a graphviz-compatible dot output, which can be used to render
+// the parse tree at e.g. https://dreampuf.github.io/GraphvizOnline/ or
+// locally. You must wrap the output with `graph G {` and `}`.
+func (n Node) Dot(prefix string) string {
+	value := "\"" + prefix + n.String() + "\" [label=\"" + n.String() + "\"];\n"
+	if n.Left != nil {
+		value += "\"" + prefix + n.String() + "\" -- \"" + prefix + "l" + n.Left.String() + "\"\n"
+		value += n.Left.Dot(prefix+"l") + "\n"
+	}
+	if n.Right != nil {
+		value += "\"" + prefix + n.String() + "\" -- \"" + prefix + "r" + n.Right.String() + "\"\n"
+		value += n.Right.Dot(prefix+"r") + "\n"
+	}
+	return value
 }
 
 // bindingPowers for different tokens. Not listed means zero. The higher the
@@ -66,7 +136,7 @@ var bindingPowers = map[TokenType]int{
 // precomputeLiterals takes two `NodeLiteral` nodes and a math operation and
 // generates a single literal node for the resutl. This prevents the interpreter
 // from needing to re-compute the value each time.
-func precomputeLiterals(offset int, nodeType NodeType, left, right *Node) (*Node, Error) {
+func precomputeLiterals(offset uint16, nodeType NodeType, left, right *Node) (*Node, Error) {
 	leftValue, err := toNumber(left, left.Value)
 	if err != nil {
 		return nil, err
@@ -75,21 +145,22 @@ func precomputeLiterals(offset int, nodeType NodeType, left, right *Node) (*Node
 	if err != nil {
 		return nil, err
 	}
+	l := left.Length + right.Length
 	switch nodeType {
 	case NodeAdd:
-		return &Node{Type: NodeLiteral, Offset: offset, Value: leftValue + rightValue}, nil
+		return &Node{Type: NodeLiteral, Offset: offset, Length: l, Value: leftValue + rightValue}, nil
 	case NodeSubtract:
-		return &Node{Type: NodeLiteral, Offset: offset, Value: leftValue - rightValue}, nil
+		return &Node{Type: NodeLiteral, Offset: offset, Length: l, Value: leftValue - rightValue}, nil
 	case NodeMultiply:
-		return &Node{Type: NodeLiteral, Offset: offset, Value: leftValue * rightValue}, nil
+		return &Node{Type: NodeLiteral, Offset: offset, Length: l, Value: leftValue * rightValue}, nil
 	case NodeDivide:
-		return &Node{Type: NodeLiteral, Offset: offset, Value: leftValue / rightValue}, nil
+		return &Node{Type: NodeLiteral, Offset: offset, Length: l, Value: leftValue / rightValue}, nil
 	case NodeModulus:
-		return &Node{Type: NodeLiteral, Offset: offset, Value: float64(int(leftValue) % int(rightValue))}, nil
+		return &Node{Type: NodeLiteral, Offset: offset, Length: l, Value: float64(int(leftValue) % int(rightValue))}, nil
 	case NodePower:
-		return &Node{Type: NodeLiteral, Offset: offset, Value: math.Pow(leftValue, rightValue)}, nil
+		return &Node{Type: NodeLiteral, Offset: offset, Length: l, Value: math.Pow(leftValue, rightValue)}, nil
 	}
-	return nil, NewError(offset, "Can't precompute unknown operator")
+	return nil, NewError(offset, 1, "Can't precompute unknown operator")
 }
 
 // Parser takes a lexer and parses its tokens into an abstract syntax tree.
@@ -157,7 +228,19 @@ func (p *parser) ensure(result *Node, err Error, typ TokenType) (*Node, Error) {
 		return result, nil
 	}
 
-	return nil, NewError(p.token.Offset, "expected %s but found %s", typ, p.token.Type)
+	extra := ""
+	if typ == TokenEOF && p.token.Type == TokenIdentifier {
+		switch p.token.Value {
+		case "startswith", "beginswith", "beginsWith", "hasprefix", "hasPrefix":
+			extra = " (did you mean `startsWith`?)"
+		case "endswith", "hassuffix", "hasSuffix":
+			extra = " (did you mean `endsWith`?)"
+		case "contains":
+			extra = " (did you mean `in`?)"
+		}
+	}
+
+	return nil, NewError(p.token.Offset, p.token.Length, "expected %s but found %s%s", typ, p.token.Type, extra)
 }
 
 // nud: null denotation. These nodes have no left context and only
@@ -166,15 +249,15 @@ func (p *parser) ensure(result *Node, err Error, typ TokenType) (*Node, Error) {
 func (p *parser) nud(t *Token) (*Node, Error) {
 	switch t.Type {
 	case TokenIdentifier:
-		return &Node{Type: NodeIdentifier, Value: t.Value, Offset: t.Offset}, nil
+		return &Node{Type: NodeIdentifier, Value: t.Value, Offset: t.Offset, Length: t.Length}, nil
 	case TokenNumber:
 		f, err := strconv.ParseFloat(t.Value, 64)
 		if err != nil {
-			return nil, NewError(p.token.Offset, err.Error())
+			return nil, NewError(p.token.Offset, p.token.Length, err.Error())
 		}
-		return &Node{Type: NodeLiteral, Value: f, Offset: t.Offset}, nil
+		return &Node{Type: NodeLiteral, Value: f, Offset: t.Offset, Length: t.Length}, nil
 	case TokenString:
-		return &Node{Type: NodeLiteral, Value: t.Value, Offset: t.Offset}, nil
+		return &Node{Type: NodeLiteral, Value: t.Value, Offset: t.Offset, Length: t.Length}, nil
 	case TokenLeftParen:
 		result, err := p.parse(0)
 		return p.ensure(result, err, TokenRightParen)
@@ -184,7 +267,7 @@ func (p *parser) nud(t *Token) (*Node, Error) {
 		if err != nil {
 			return nil, err
 		}
-		return &Node{Type: NodeNot, Offset: offset, Right: result}, nil
+		return &Node{Type: NodeNot, Offset: offset, Length: uint8(t.Offset + uint16(t.Length) - offset), Right: result}, nil
 	case TokenAddSub:
 		value := t.Value
 		offset := t.Offset
@@ -192,21 +275,23 @@ func (p *parser) nud(t *Token) (*Node, Error) {
 		if err != nil {
 			return nil, err
 		}
-		return &Node{Type: NodeSign, Value: value, Offset: offset, Right: result}, nil
+		return &Node{Type: NodeSign, Value: value, Offset: offset, Length: uint8(t.Offset + uint16(t.Length) - offset), Right: result}, nil
 	case TokenSlice:
 		offset := t.Offset
 		result, err := p.parse(bindingPowers[t.Type])
 		if err != nil {
 			return nil, err
 		}
-		// Create a dummy left node with value 0, the start of the slice.
-		return &Node{Type: NodeSlice, Offset: offset, Left: &Node{Type: NodeLiteral, Value: 0.0, Offset: offset}, Right: result}, nil
+		// Create a dummy left node with value 0, the start of the slice. This also
+		// sets the parent node's value to a pre-allocated list of [0, 0] which is
+		// used later by the interpreter. It prevents additional allocations.
+		return &Node{Type: NodeSlice, Offset: offset, Length: uint8(t.Offset + uint16(t.Length) - offset), Left: &Node{Type: NodeLiteral, Value: 0.0, Offset: offset}, Right: result, Value: []interface{}{0.0, 0.0}}, nil
 	case TokenRightParen:
-		return nil, NewError(p.token.Offset, "unexpected right-paren")
+		return nil, NewError(t.Offset, t.Length, "unexpected right-paren")
 	case TokenRightBracket:
-		return nil, NewError(p.token.Offset, "unexpected right-bracket")
+		return nil, NewError(t.Offset, t.Length, "unexpected right-bracket")
 	case TokenEOF:
-		return nil, NewError(p.token.Offset, "incomplete expression, EOF found")
+		return nil, NewError(t.Offset, t.Length, "incomplete expression, EOF found")
 	}
 	return nil, nil
 }
@@ -220,9 +305,9 @@ func (p *parser) newNodeParseRight(left *Node, t *Token, typ NodeType, bindingPo
 		return nil, err
 	}
 	if right == nil {
-		return nil, NewError(t.Offset, "missing right operand")
+		return nil, NewError(t.Offset, t.Length, "missing right operand")
 	}
-	return &Node{Type: typ, Offset: offset, Left: left, Right: right}, nil
+	return &Node{Type: typ, Offset: offset, Length: uint8(p.token.Offset + uint16(p.token.Length) - offset), Left: left, Right: right}, nil
 }
 
 // led: left denotation. These tokens produce nodes that operate on two operands
@@ -257,14 +342,14 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 			return nil, err
 		}
 		if right == nil {
-			return nil, NewError(t.Offset, "missing right operand")
+			return nil, NewError(t.Offset, t.Length, "missing right operand")
 		}
 		if n.Type == NodeLiteral && right.Type == NodeLiteral {
 			if !(isString(n.Value) || isString(right.Value)) {
 				return precomputeLiterals(offset, nodeType, n, right)
 			}
 		}
-		return &Node{Type: nodeType, Offset: offset, Left: n, Right: right}, nil
+		return &Node{Type: nodeType, Offset: offset, Length: uint8(t.Offset + uint16(t.Length) - offset), Left: n, Right: right, Value: 0.0}, nil
 	case TokenComparison:
 		var nodeType NodeType
 		switch t.Value {
@@ -304,11 +389,19 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 		return p.ensure(n, err, TokenRightBracket)
 	case TokenSlice:
 		if p.token.Type == TokenRightBracket {
-			return &Node{Type: NodeSlice, Offset: t.Offset, Left: n, Right: &Node{Type: NodeLiteral, Offset: t.Offset, Value: -1.0}}, nil
+			// This sets the parent node's value to a pre-allocated list of [0, 0]
+			// which is used later by the interpreter. It prevents additional
+			// allocations.
+			return &Node{Type: NodeSlice, Offset: t.Offset, Length: t.Length, Left: n, Right: &Node{Type: NodeLiteral, Offset: t.Offset, Value: -1.0}, Value: []interface{}{0.0, 0.0}}, nil
 		}
-		return p.newNodeParseRight(n, t, NodeSlice, bindingPowers[t.Type])
+		nn, err := p.newNodeParseRight(n, t, NodeSlice, bindingPowers[t.Type])
+		if err != nil {
+			return nil, err
+		}
+		nn.Value = []interface{}{0.0, 0.0}
+		return nn, nil
 	}
-	return nil, NewError(t.Offset, "unexpected token %s", t.Type)
+	return nil, NewError(t.Offset, t.Length, "unexpected token %s", t.Type)
 }
 
 func (p *parser) Parse() (*Node, Error) {

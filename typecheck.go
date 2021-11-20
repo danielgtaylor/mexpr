@@ -115,7 +115,7 @@ func (i *typeChecker) run(ast *Node, value interface{}) (*schema, Error) {
 				return getSchema(v), nil
 			}
 		}
-		return nil, NewError(ast.Offset, "no property %v in %v", ast.Value, value)
+		return nil, NewError(ast.Offset, ast.Length, "no property %v in %v", ast.Value, value)
 	case NodeFieldSelect:
 		leftType, err := i.run(ast.Left, value)
 		if err != nil {
@@ -128,7 +128,7 @@ func (i *typeChecker) run(ast *Node, value interface{}) (*schema, Error) {
 			return nil, err
 		}
 		if !(leftType.isString() || leftType.isArray()) {
-			return nil, NewError(ast.Offset, "can only index strings or arrays but got %v", leftType)
+			return nil, NewError(ast.Offset, ast.Length, "can only index strings or arrays but got %v", leftType)
 		}
 		if rightType.isArray() {
 			// This is a slice!
@@ -140,17 +140,17 @@ func (i *typeChecker) run(ast *Node, value interface{}) (*schema, Error) {
 			}
 			return leftType.items, nil
 		}
-		return nil, NewError(ast.Offset, "array index must be number or slice but found %v", rightType)
+		return nil, NewError(ast.Offset, ast.Length, "array index must be number or slice but found %v", rightType)
 	case NodeSlice:
 		leftType, rightType, err := i.runBoth(ast, value)
 		if err != nil {
 			return nil, err
 		}
 		if !leftType.isNumber() {
-			return nil, NewError(ast.Offset, "slice index must be a number but found %s", leftType)
+			return nil, NewError(ast.Offset, ast.Length, "slice index must be a number but found %s", leftType)
 		}
 		if !rightType.isNumber() {
-			return nil, NewError(ast.Offset, "slice index must be a number but found %s", rightType)
+			return nil, NewError(ast.Offset, ast.Length, "slice index must be a number but found %s", rightType)
 		}
 		s := newSchema(typeArray)
 		s.items = leftType
@@ -163,10 +163,10 @@ func (i *typeChecker) run(ast *Node, value interface{}) (*schema, Error) {
 			return nil, err
 		}
 		if !rightType.isNumber() {
-			return nil, NewError(ast.Offset, "expected number but found %s", rightType)
+			return nil, NewError(ast.Offset, ast.Length, "expected number but found %s", rightType)
 		}
 		return schemaNumber, nil
-	case NodeAdd, NodeSubtract, NodeMultiply, NodeDivide, NodePower:
+	case NodeAdd, NodeSubtract, NodeMultiply, NodeDivide, NodeModulus, NodePower:
 		leftType, rightType, err := i.runBoth(ast, value)
 		if err != nil {
 			return nil, err
@@ -177,7 +177,7 @@ func (i *typeChecker) run(ast *Node, value interface{}) (*schema, Error) {
 			}
 			if leftType.isArray() && rightType.isArray() {
 				if leftType.items.typeName != rightType.items.typeName {
-					return nil, NewError(ast.Offset, "array item types don't match: %s vs %s", leftType.items, rightType.items)
+					return nil, NewError(ast.Offset, ast.Length, "array item types don't match: %s vs %s", leftType.items, rightType.items)
 				}
 				return leftType, nil
 			}
@@ -185,14 +185,14 @@ func (i *typeChecker) run(ast *Node, value interface{}) (*schema, Error) {
 		if leftType.isNumber() && rightType.isNumber() {
 			return leftType, nil
 		}
-		return nil, NewError(ast.Offset, "cannot operate on incompatible types %v and %v", leftType.typeName, rightType.typeName)
+		return nil, NewError(ast.Offset, ast.Length, "cannot operate on incompatible types %v and %v", leftType.typeName, rightType.typeName)
 	case NodeLessThan, NodeLessThanEqual, NodeGreaterThan, NodeGreaterThanEqual:
 		leftType, rightType, err := i.runBoth(ast, value)
 		if err != nil {
 			return nil, err
 		}
 		if !leftType.isNumber() || !rightType.isNumber() {
-			return nil, NewError(ast.Offset, "cannot compare %s with %s", leftType, rightType)
+			return nil, NewError(ast.Offset, ast.Length, "cannot compare %s with %s", leftType, rightType)
 		}
 		return schemaBool, nil
 	case NodeEqual, NodeNotEqual, NodeAnd, NodeOr, NodeIn, NodeStartsWith, NodeEndsWith:
@@ -208,5 +208,5 @@ func (i *typeChecker) run(ast *Node, value interface{}) (*schema, Error) {
 		}
 		return schemaBool, nil
 	}
-	return nil, NewError(ast.Offset, "unexpected node")
+	return nil, NewError(ast.Offset, ast.Length, "unexpected node")
 }
