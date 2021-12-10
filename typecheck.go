@@ -1,5 +1,7 @@
 package mexpr
 
+import "strings"
+
 type valueType string
 
 const (
@@ -110,12 +112,18 @@ func (i *typeChecker) run(ast *Node, value interface{}) (*schema, Error) {
 				return v, nil
 			}
 		}
+		errValue := value
 		if m, ok := value.(map[string]interface{}); ok {
 			if v, ok := m[ast.Value.(string)]; ok {
 				return getSchema(v), nil
 			}
+			keys := []string{}
+			for k := range m {
+				keys = append(keys, k)
+			}
+			errValue = "map with keys [" + strings.Join(keys, ", ") + "]"
 		}
-		return nil, NewError(ast.Offset, ast.Length, "no property %v in %v", ast.Value, value)
+		return nil, NewError(ast.Offset, ast.Length, "no property %v in %v", ast.Value, errValue)
 	case NodeFieldSelect:
 		leftType, err := i.run(ast.Left, value)
 		if err != nil {
