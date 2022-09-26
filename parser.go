@@ -33,8 +33,10 @@ const (
 	NodeSlice
 	NodeSign
 	NodeIn
+	NodeContains
 	NodeStartsWith
 	NodeEndsWith
+	NodeWhere
 )
 
 // Node is a unit of the binary tree that makes up the abstract syntax tree.
@@ -91,10 +93,14 @@ func (n Node) String() string {
 		return ":"
 	case NodeIn:
 		return "in"
+	case NodeContains:
+		return "contains"
 	case NodeStartsWith:
 		return "startsWith"
 	case NodeEndsWith:
 		return "endsWith"
+	case NodeWhere:
+		return "where"
 	}
 
 	return ""
@@ -121,7 +127,8 @@ func (n Node) Dot(prefix string) string {
 var bindingPowers = map[TokenType]int{
 	TokenOr:            1,
 	TokenAnd:           2,
-	TokenStringCompare: 3,
+	TokenWhere:         3,
+	TokenStringCompare: 4,
 	TokenComparison:    5,
 	TokenSlice:         5,
 	TokenAddSub:        10,
@@ -376,12 +383,16 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 		switch t.Value {
 		case "in":
 			nodeType = NodeIn
+		case "contains":
+			nodeType = NodeContains
 		case "startsWith":
 			nodeType = NodeStartsWith
 		case "endsWith":
 			nodeType = NodeEndsWith
 		}
 		return p.newNodeParseRight(n, t, nodeType, bindingPowers[t.Type])
+	case TokenWhere:
+		return p.newNodeParseRight(n, t, NodeWhere, bindingPowers[t.Type])
 	case TokenDot:
 		return p.newNodeParseRight(n, t, NodeFieldSelect, bindingPowers[t.Type])
 	case TokenLeftBracket:

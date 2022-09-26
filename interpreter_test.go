@@ -70,6 +70,9 @@ func TestInterpreter(t *testing.T) {
 		{expr: "foo", input: `{"foo": 1.0}`, output: 1.0},
 		{expr: "foo.bar.baz", input: `{"foo": {"bar": {"baz": 1.0}}}`, output: 1.0},
 		{expr: `foo == "foo"`, input: `{"foo": "foo"}`, output: true},
+		{expr: `foo.in.not`, input: `{"foo": {"in": {"not": 1}}}`, output: 1.0},
+		{expr: `@`, input: `{"hello": "world"}`, output: map[string]interface{}{"hello": "world"}},
+		{expr: `hello.@`, input: `{"hello": "world"}`, output: "world"},
 		// Arrays
 		{expr: "foo[0]", input: `{"foo": [1, 2]}`, output: 1.0},
 		{expr: "foo[-1]", input: `{"foo": [1, 2]}`, output: 2.0},
@@ -89,6 +92,10 @@ func TestInterpreter(t *testing.T) {
 		{expr: `1 < 2 in "this is true"`, output: true},
 		{expr: `1 < 2 in "this is false"`, output: false},
 		{expr: `"bar" in foo`, input: `{"foo": {"bar": 1}}`, output: true},
+		// Contains
+		{expr: `"foobar" contains "foo"`, output: true},
+		{expr: `"foobar" contains "baz"`, output: false},
+		{expr: `labels contains "foo"`, input: `{"labels": ["foo", "bar"]}`, output: true},
 		// Starts / ends with
 		{expr: `"foo" startsWith "f"`, output: true},
 		{expr: `"foo" startsWith "o"`, output: false},
@@ -101,6 +108,14 @@ func TestInterpreter(t *testing.T) {
 		{expr: `"foo".length`, output: 3},
 		{expr: `str.length`, input: `{"str": "abcdef"}`, output: 6},
 		{expr: `arr.length`, input: `{"arr": [1, 2]}`, output: 2},
+		// Lower/Upper
+		{expr: `"foo".upper`, output: "FOO"},
+		{expr: `str.lower`, input: `{"str": "ABCD"}`, output: "abcd"},
+		// Where
+		{expr: `items where id > 3`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: []interface{}{map[string]interface{}{"id": 5.0}, map[string]interface{}{"id": 7.0}}},
+		{expr: `items where id > 3 where labels contains "foo"`, input: `{"items": [{"id": 1, "labels": ["foo"]}, {"id": 3}, {"id": 5, "labels": ["foo"]}, {"id": 7}]}`, output: []interface{}{map[string]interface{}{"id": 5.0, "labels": []interface{}{"foo"}}}},
+		{expr: `(items where id > 3).length == 2`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: true},
+		{expr: `not (items where id > 3)`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: false},
 		// Order of operations
 		{expr: "1 + 2 + 3", output: 6.0},
 		{expr: "1 + 2 * 3", output: 7.0},

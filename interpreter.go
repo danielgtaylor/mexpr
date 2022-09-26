@@ -16,7 +16,7 @@ const (
 
 // Interpreter executes expression AST programs.
 type Interpreter interface {
-	Run(value interface{}) (interface{}, Error)
+	Run(value any) (any, Error)
 }
 
 // NewInterpreter returns an interpreter for the given AST.
@@ -40,27 +40,46 @@ type interpreter struct {
 	strict bool
 }
 
-func (i *interpreter) Run(value interface{}) (interface{}, Error) {
+func (i *interpreter) Run(value any) (any, Error) {
 	return i.run(i.ast, value)
 }
 
-func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
+func (i *interpreter) run(ast *Node, value any) (any, Error) {
 	switch ast.Type {
 	case NodeIdentifier:
-		if ast.Value.(string) == "length" {
+		switch ast.Value.(string) {
+		case "@":
+			return value, nil
+		case "length":
 			// Special pseudo-property to get the value's length.
 			if s, ok := value.(string); ok {
 				return len(s), nil
 			}
-			if a, ok := value.([]interface{}); ok {
+			if a, ok := value.([]any); ok {
 				return len(a), nil
 			}
+		case "lower":
+			if s, ok := value.(string); ok {
+				return strings.ToLower(s), nil
+			}
+		case "upper":
+			if s, ok := value.(string); ok {
+				return strings.ToUpper(s), nil
+			}
 		}
-		if m, ok := value.(map[string]interface{}); ok {
+		if m, ok := value.(map[string]any); ok {
 			if !i.strict {
 				return m[ast.Value.(string)], nil
 			}
 			if v, ok := m[ast.Value.(string)]; ok {
+				return v, nil
+			}
+		}
+		if m, ok := value.(map[any]any); ok {
+			if !i.strict {
+				return m[ast.Value], nil
+			}
+			if v, ok := m[ast.Value]; ok {
 				return v, nil
 			}
 		}
@@ -84,15 +103,15 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			return nil, err
 		}
 		if isSlice(resultRight) {
-			start, err := toNumber(ast, resultRight.([]interface{})[0])
+			start, err := toNumber(ast, resultRight.([]any)[0])
 			if err != nil {
 				return nil, err
 			}
-			end, err := toNumber(ast, resultRight.([]interface{})[1])
+			end, err := toNumber(ast, resultRight.([]any)[1])
 			if err != nil {
 				return nil, err
 			}
-			if left, ok := resultLeft.([]interface{}); ok {
+			if left, ok := resultLeft.([]any); ok {
 				if start < 0 {
 					start += float64(len(left))
 				}
@@ -115,7 +134,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 			if err != nil {
 				return nil, err
 			}
-			if left, ok := resultLeft.([]interface{}); ok {
+			if left, ok := resultLeft.([]any); ok {
 				if idx < 0 {
 					idx += float64(len(left))
 				}
@@ -137,8 +156,8 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		if err != nil {
 			return nil, err
 		}
-		ast.Value.([]interface{})[0] = resultLeft
-		ast.Value.([]interface{})[1] = resultRight
+		ast.Value.([]any)[0] = resultLeft
+		ast.Value.([]any)[1] = resultRight
 		return ast.Value, nil
 	case NodeLiteral:
 		return ast.Value, nil
@@ -169,8 +188,8 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 				return toString(resultLeft) + toString(resultRight), nil
 			}
 			if isSlice(resultLeft) && isSlice(resultRight) {
-				tmp := append([]interface{}{}, resultLeft.([]interface{})...)
-				return append(tmp, resultRight.([]interface{})...), nil
+				tmp := append([]any{}, resultLeft.([]any)...)
+				return append(tmp, resultRight.([]any)...), nil
 			}
 		}
 		if isNumber(resultLeft) && isNumber(resultRight) {
@@ -253,7 +272,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		case NodeOr:
 			return left || right, nil
 		}
-	case NodeIn, NodeStartsWith, NodeEndsWith:
+	case NodeIn, NodeContains, NodeStartsWith, NodeEndsWith:
 		resultLeft, err := i.run(ast.Left, value)
 		if err != nil {
 			return nil, err
@@ -264,7 +283,7 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		}
 		switch ast.Type {
 		case NodeIn:
-			if a, ok := resultRight.([]interface{}); ok {
+			if a, ok := resultRight.([]any); ok {
 				for _, item := range a {
 					if item == resultLeft {
 						return true, nil
@@ -272,13 +291,41 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 				}
 				return false, nil
 			}
-			if m, ok := resultRight.(map[string]interface{}); ok {
+			if m, ok := resultRight.(map[string]any); ok {
 				if m[toString(resultLeft)] != nil {
 					return true, nil
 				}
 				return false, nil
 			}
+			if m, ok := resultRight.(map[any]any); ok {
+				if m[resultLeft] != nil {
+					return true, nil
+				}
+				return false, nil
+			}
 			return strings.Contains(toString(resultRight), toString(resultLeft)), nil
+		case NodeContains:
+			if a, ok := resultLeft.([]any); ok {
+				for _, item := range a {
+					if item == resultRight {
+						return true, nil
+					}
+				}
+				return false, nil
+			}
+			if m, ok := resultLeft.(map[string]any); ok {
+				if m[toString(resultRight)] != nil {
+					return true, nil
+				}
+				return false, nil
+			}
+			if m, ok := resultLeft.(map[any]any); ok {
+				if m[resultRight] != nil {
+					return true, nil
+				}
+				return false, nil
+			}
+			return strings.Contains(toString(resultLeft), toString(resultRight)), nil
 		case NodeStartsWith:
 			return strings.HasPrefix(toString(resultLeft), toString(resultRight)), nil
 		case NodeEndsWith:
@@ -291,6 +338,22 @@ func (i *interpreter) run(ast *Node, value interface{}) (interface{}, Error) {
 		}
 		right := toBool(resultRight)
 		return !right, nil
+	case NodeWhere:
+		resultLeft, err := i.run(ast.Left, value)
+		if err != nil {
+			return nil, err
+		}
+		results := []any{}
+		for _, item := range resultLeft.([]any) {
+			resultRight, _ := i.run(ast.Right, item)
+			if i.strict && err != nil {
+				return nil, err
+			}
+			if toBool(resultRight) {
+				results = append(results, item)
+			}
+		}
+		return results, nil
 	}
 	return nil, nil
 }
