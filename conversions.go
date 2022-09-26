@@ -39,7 +39,7 @@ func toNumber(ast *Node, v interface{}) (float64, Error) {
 	case float32:
 		return float64(n), nil
 	}
-	return 0, NewError(ast.Offset, ast.Length, "unable to convert to number")
+	return 0, NewError(ast.Offset, ast.Length, "unable to convert to number: %v", v)
 }
 
 func isString(v interface{}) bool {

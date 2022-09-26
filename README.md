@@ -78,6 +78,9 @@ Internally all numbers are treated as `float64`, which means fewer conversions/c
 
 ### Accessing properties
 
+- Use `.` between property names
+- Use `[` and `]` for indexes, which can be negative
+
 ```py
 foo.bar[0].value
 ```
@@ -134,6 +137,7 @@ Non-boolean values are converted to booleans. The following result in `true`:
 - `.length` pseudo-property, e.g. `foo.length`
 - `+` (concatenation)
 - `in` e.g. `"f" in "foo"`
+- `contains` e.g. `"foo" contains "f"`
 - `startsWith` e.g. `"foo" startsWith "f"`
 - `endsWith` e.g. `"foo" endsWith "o"`
 
@@ -150,12 +154,44 @@ There is no distinction between strings, bytes, or runes. Everything is treated 
 - `.length` pseudo-property, e.g. `foo.length`
 - `+` (concatenation)
 - `in` (has item), e.g. `1 in foo`
+- `contains` e.g. `foo contains 1`
 
 Indexes are zero-based. Slice indexes are optional and are _inclusive_. `foo[1:2]` returns `[2, 3]` if the `foo` is `[1, 2, 3, 4]`. Indexes can be negative, e.g. `foo[-1]` selects the last item in the array.
+
+#### Array/slice filtering
+
+A `where` clause can be used to filter the items in an array. The left side of the clause is the array to be filtered, while the right side is an expression to run on each item of the array. If the right side expression evaluates to true then the item is added to the result. For example:
+
+```
+// Get a list of items where the item.id is bigger than 3
+items where id > 3
+
+// More complex example
+items where (id > 3 and labels contains "best")
+```
+
+This also makes it possible to implement one/any/all/none logic:
+
+```
+// One
+(items where id > 3).length == 1
+
+// Any
+items where id > 3
+(items where id > 3).length > 0
+
+// All
+(items where id > 3).length == items.length
+
+// None
+not (items where id > 3)
+(items where id > 3).length == 0
+```
 
 ### Map operators
 
 - `in` (has key), e.g. `"key" in foo`
+- `contains` e.g. `foo contains "key"`
 
 ## Performance
 

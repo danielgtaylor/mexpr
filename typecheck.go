@@ -1,6 +1,8 @@
 package mexpr
 
-import "strings"
+import (
+	"strings"
+)
 
 type valueType string
 
@@ -45,7 +47,7 @@ func newSchema(t valueType) *schema {
 	return &schema{typeName: t}
 }
 
-func getSchema(v interface{}) *schema {
+func getSchema(v any) *schema {
 	switch i := v.(type) {
 	case bool:
 		return schemaBool
@@ -53,15 +55,22 @@ func getSchema(v interface{}) *schema {
 		return schemaNumber
 	case string, []byte:
 		return schemaString
-	case []interface{}:
+	case []any:
 		s := newSchema(typeArray)
 		s.items = getSchema(i[0])
 		return s
-	case map[string]interface{}:
+	case map[string]any:
 		m := newSchema(typeObject)
 		m.properties = make(map[string]*schema, len(i))
 		for k, v := range i {
 			m.properties[k] = getSchema(v)
+		}
+		return m
+	case map[any]any:
+		m := newSchema(typeObject)
+		m.properties = make(map[string]*schema, len(i))
+		for k, v := range i {
+			m.properties[toString(k)] = getSchema(v)
 		}
 		return m
 	}
@@ -70,7 +79,7 @@ func getSchema(v interface{}) *schema {
 
 // TypeChecker checks to ensure types used for operations will work.
 type TypeChecker interface {
-	Run(value interface{}) Error
+	Run(value any) Error
 }
 
 // NewTypeChecker returns a type checker for the given AST.
@@ -84,12 +93,12 @@ type typeChecker struct {
 	ast *Node
 }
 
-func (i *typeChecker) Run(value interface{}) Error {
+func (i *typeChecker) Run(value any) Error {
 	_, err := i.run(i.ast, value)
 	return err
 }
 
-func (i *typeChecker) runBoth(ast *Node, value interface{}) (*schema, *schema, Error) {
+func (i *typeChecker) runBoth(ast *Node, value any) (*schema, *schema, Error) {
 	leftType, err := i.run(ast.Left, value)
 	if err != nil {
 		return nil, nil, err
@@ -101,11 +110,19 @@ func (i *typeChecker) runBoth(ast *Node, value interface{}) (*schema, *schema, E
 	return leftType, rightType, nil
 }
 
-func (i *typeChecker) run(ast *Node, value interface{}) (*schema, Error) {
+func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 	switch ast.Type {
 	case NodeIdentifier:
-		if ast.Value.(string) == "length" {
+		switch ast.Value.(string) {
+		case "@":
+			if s, ok := value.(*schema); ok {
+				return s, nil
+			}
+			return getSchema(value), nil
+		case "length":
 			return schemaNumber, nil
+		case "lower", "upper":
+			return schemaString, nil
 		}
 		if s, ok := value.(*schema); ok {
 			if v, ok := s.properties[ast.Value.(string)]; ok {
@@ -113,13 +130,23 @@ func (i *typeChecker) run(ast *Node, value interface{}) (*schema, Error) {
 			}
 		}
 		errValue := value
-		if m, ok := value.(map[string]interface{}); ok {
+		if m, ok := value.(map[string]any); ok {
 			if v, ok := m[ast.Value.(string)]; ok {
 				return getSchema(v), nil
 			}
 			keys := []string{}
 			for k := range m {
 				keys = append(keys, k)
+			}
+			errValue = "map with keys [" + strings.Join(keys, ", ") + "]"
+		}
+		if m, ok := value.(map[any]any); ok {
+			if v, ok := m[ast.Value]; ok {
+				return getSchema(v), nil
+			}
+			keys := []string{}
+			for k := range m {
+				keys = append(keys, toString(k))
 			}
 			errValue = "map with keys [" + strings.Join(keys, ", ") + "]"
 		}
@@ -203,12 +230,25 @@ func (i *typeChecker) run(ast *Node, value interface{}) (*schema, Error) {
 			return nil, NewError(ast.Offset, ast.Length, "cannot compare %s with %s", leftType, rightType)
 		}
 		return schemaBool, nil
-	case NodeEqual, NodeNotEqual, NodeAnd, NodeOr, NodeIn, NodeStartsWith, NodeEndsWith:
+	case NodeEqual, NodeNotEqual, NodeAnd, NodeOr, NodeIn, NodeContains, NodeStartsWith, NodeEndsWith:
 		_, _, err := i.runBoth(ast, value)
 		if err != nil {
 			return nil, err
 		}
 		return schemaBool, nil
+	case NodeWhere:
+		leftType, err := i.run(ast.Left, value)
+		if err != nil {
+			return nil, err
+		}
+		if !leftType.isArray() {
+			return nil, NewError(ast.Offset, ast.Length, "filter requires an array, but found %s", leftType)
+		}
+		_, err = i.run(ast.Right, leftType.items)
+		if err != nil {
+			return nil, err
+		}
+		return leftType, nil
 	case NodeNot:
 		_, err := i.run(ast.Right, value)
 		if err != nil {

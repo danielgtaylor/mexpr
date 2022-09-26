@@ -29,6 +29,7 @@ const (
 	TokenOr
 	TokenNot
 	TokenStringCompare
+	TokenWhere
 	TokenEOF
 )
 
@@ -67,7 +68,9 @@ func (t TokenType) String() string {
 	case TokenNot:
 		return "not"
 	case TokenStringCompare:
-		return "in"
+		return "string-compare(in/contains/starts/ends)"
+	case TokenWhere:
+		return "where"
 	case TokenEOF:
 		return "eof"
 	}
@@ -204,15 +207,22 @@ func (l *lexer) consumeIdentifier() *Token {
 		}
 	}
 	value := l.expression[start:l.pos]
-	switch string(value) {
-	case "and":
-		return l.newToken(TokenAnd, value)
-	case "or":
-		return l.newToken(TokenOr, value)
-	case "not":
-		return l.newToken(TokenNot, value)
-	case "in", "startsWith", "endsWith":
-		return l.newToken(TokenStringCompare, value)
+	if l.token.Type != TokenDot {
+		// Only parse special identifiers if the last token type was *not* an object
+		// property selector, e.g. `foo.in.not` vs `foo in ...`. This enables
+		// keywords to be used as properties without issue.
+		switch string(value) {
+		case "and":
+			return l.newToken(TokenAnd, value)
+		case "or":
+			return l.newToken(TokenOr, value)
+		case "not":
+			return l.newToken(TokenNot, value)
+		case "in", "contains", "startsWith", "endsWith":
+			return l.newToken(TokenStringCompare, value)
+		case "where":
+			return l.newToken(TokenWhere, value)
+		}
 	}
 	return l.newToken(TokenIdentifier, value)
 }

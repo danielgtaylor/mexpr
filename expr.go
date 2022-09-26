@@ -42,5 +42,8 @@ func Eval(expression string, input map[string]interface{}, options ...Interprete
 	if err != nil {
 		return nil, err
 	}
+	if ast == nil {
+		return nil, nil
+	}
 	return Run(ast, input, options...)
 }
