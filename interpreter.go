@@ -14,6 +14,21 @@ const (
 	StrictMode InterpreterOption = iota
 )
 
+// checkBounds returns an error if the index is out of bounds.
+func checkBounds(ast *Node, input any, idx int) Error {
+	if v, ok := input.([]any); ok {
+		if idx < 0 || idx >= len(v) {
+			return NewError(ast.Offset, ast.Length, "invalid index %d for slice of length %d", int(idx), len(v))
+		}
+	}
+	if v, ok := input.(string); ok {
+		if idx < 0 || idx >= len(v) {
+			return NewError(ast.Offset, ast.Length, "invalid index %d for string of length %d", int(idx), len(v))
+		}
+	}
+	return nil
+}
+
 // Interpreter executes expression AST programs.
 type Interpreter interface {
 	Run(value any) (any, Error)
@@ -45,6 +60,10 @@ func (i *interpreter) Run(value any) (any, Error) {
 }
 
 func (i *interpreter) run(ast *Node, value any) (any, Error) {
+	if ast == nil {
+		return nil, nil
+	}
+
 	switch ast.Type {
 	case NodeIdentifier:
 		switch ast.Value.(string) {
@@ -118,6 +137,12 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				if end < 0 {
 					end += float64(len(left))
 				}
+				if err := checkBounds(ast, left, int(start)); err != nil {
+					return nil, err
+				}
+				if err := checkBounds(ast, left, int(end)); err != nil {
+					return nil, err
+				}
 				return left[int(start) : int(end)+1], nil
 			}
 			left := toString(resultLeft)
@@ -126,6 +151,12 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			}
 			if end < 0 {
 				end += float64(len(left))
+			}
+			if err := checkBounds(ast, left, int(start)); err != nil {
+				return nil, err
+			}
+			if err := checkBounds(ast, left, int(end)); err != nil {
+				return nil, err
 			}
 			return left[int(start) : int(end)+1], nil
 		}
@@ -138,11 +169,17 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				if idx < 0 {
 					idx += float64(len(left))
 				}
+				if err := checkBounds(ast, left, int(idx)); err != nil {
+					return nil, err
+				}
 				return left[int(idx)], nil
 			}
 			left := toString(resultLeft)
 			if idx < 0 {
 				idx += float64(len(left))
+			}
+			if err := checkBounds(ast, left, int(idx)); err != nil {
+				return nil, err
 			}
 			return string(left[int(idx)]), nil
 		}
@@ -214,6 +251,9 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				}
 				return left / right, nil
 			case NodeModulus:
+				if int(right) == 0 {
+					return nil, NewError(ast.Offset, ast.Length, "cannot divide by zero")
+				}
 				return int(left) % int(right), nil
 			case NodePower:
 				return math.Pow(left, right), nil
@@ -230,10 +270,10 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			return nil, err
 		}
 		if ast.Type == NodeEqual {
-			return normalize(resultLeft) == normalize(resultRight), nil
+			return deepEqual(resultLeft, resultRight), nil
 		}
 		if ast.Type == NodeNotEqual {
-			return normalize(resultLeft) != normalize(resultRight), nil
+			return !deepEqual(resultLeft, resultRight), nil
 		}
 
 		left, err := toNumber(ast.Left, resultLeft)
@@ -272,6 +312,28 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		case NodeOr:
 			return left || right, nil
 		}
+	case NodeBefore, NodeAfter:
+		resultLeft, err := i.run(ast.Left, value)
+		if err != nil {
+			return nil, err
+		}
+		leftTime := toTime(resultLeft)
+		if leftTime.IsZero() {
+			return nil, NewError(ast.Offset, ast.Length, "unable to convert %v to date or time", resultLeft)
+		}
+		resultRight, err := i.run(ast.Right, value)
+		if err != nil {
+			return nil, err
+		}
+		rightTime := toTime(resultRight)
+		if rightTime.IsZero() {
+			return nil, NewError(ast.Offset, ast.Length, "unable to convert %v to date or time", resultRight)
+		}
+		if ast.Type == NodeBefore {
+			return leftTime.Before(rightTime), nil
+		} else {
+			return leftTime.After(rightTime), nil
+		}
 	case NodeIn, NodeContains, NodeStartsWith, NodeEndsWith:
 		resultLeft, err := i.run(ast.Left, value)
 		if err != nil {
@@ -285,7 +347,7 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		case NodeIn:
 			if a, ok := resultRight.([]any); ok {
 				for _, item := range a {
-					if item == resultLeft {
+					if deepEqual(item, resultLeft) {
 						return true, nil
 					}
 				}
@@ -307,7 +369,7 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		case NodeContains:
 			if a, ok := resultLeft.([]any); ok {
 				for _, item := range a {
-					if item == resultRight {
+					if deepEqual(item, resultRight) {
 						return true, nil
 					}
 				}

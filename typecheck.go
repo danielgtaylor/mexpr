@@ -57,7 +57,9 @@ func getSchema(v any) *schema {
 		return schemaString
 	case []any:
 		s := newSchema(typeArray)
-		s.items = getSchema(i[0])
+		if len(i) > 0 {
+			s.items = getSchema(i[0])
+		}
 		return s
 	case map[string]any:
 		m := newSchema(typeObject)
@@ -230,7 +232,7 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 			return nil, NewError(ast.Offset, ast.Length, "cannot compare %s with %s", leftType, rightType)
 		}
 		return schemaBool, nil
-	case NodeEqual, NodeNotEqual, NodeAnd, NodeOr, NodeIn, NodeContains, NodeStartsWith, NodeEndsWith:
+	case NodeEqual, NodeNotEqual, NodeAnd, NodeOr, NodeIn, NodeContains, NodeStartsWith, NodeEndsWith, NodeBefore, NodeAfter:
 		_, _, err := i.runBoth(ast, value)
 		if err != nil {
 			return nil, err
@@ -242,7 +244,7 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 			return nil, err
 		}
 		if !leftType.isArray() {
-			return nil, NewError(ast.Offset, ast.Length, "filter requires an array, but found %s", leftType)
+			return nil, NewError(ast.Offset, ast.Length, "where clause requires an array, but found %s", leftType)
 		}
 		_, err = i.run(ast.Right, leftType.items)
 		if err != nil {

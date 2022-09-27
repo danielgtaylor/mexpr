@@ -68,7 +68,7 @@ func (t TokenType) String() string {
 	case TokenNot:
 		return "not"
 	case TokenStringCompare:
-		return "string-compare(in/contains/starts/ends)"
+		return "string-compare"
 	case TokenWhere:
 		return "where"
 	case TokenEOF:
@@ -218,7 +218,7 @@ func (l *lexer) consumeIdentifier() *Token {
 			return l.newToken(TokenOr, value)
 		case "not":
 			return l.newToken(TokenNot, value)
-		case "in", "contains", "startsWith", "endsWith":
+		case "in", "contains", "startsWith", "endsWith", "before", "after":
 			return l.newToken(TokenStringCompare, value)
 		case "where":
 			return l.newToken(TokenWhere, value)
@@ -262,6 +262,9 @@ func (l *lexer) Next() (*Token, Error) {
 			if n >= '0' && n <= '9' {
 				return l.consumeNumber(), nil
 			}
+		}
+		if l.pos-l.lastWidth > uint16(len(l.expression)-1) {
+			return l.newToken(TokenEOF, ""), nil
 		}
 		return l.newToken(b, l.expression[l.pos-l.lastWidth:l.pos]), nil
 	}
