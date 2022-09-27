@@ -1,6 +1,10 @@
 package mexpr
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+	"time"
+)
 
 func isNumber(v interface{}) bool {
 	switch v.(type) {
@@ -62,6 +66,22 @@ func toString(v interface{}) string {
 		return string(s)
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+// toTime converts a string value into a time.Time if possible, otherwise
+// returns a zero time.
+func toTime(v interface{}) time.Time {
+	vStr := toString(v)
+	if t, err := time.Parse(time.RFC3339, vStr); err == nil {
+		return t
+	}
+	if t, err := time.Parse("2006-01-02T15:04:05", vStr); err == nil {
+		return t
+	}
+	if t, err := time.Parse("2006-01-02", vStr); err == nil {
+		return t
+	}
+	return time.Time{}
 }
 
 func isSlice(v interface{}) bool {
@@ -143,4 +163,25 @@ func normalize(v interface{}) interface{} {
 	}
 
 	return v
+}
+
+// deepEqual returns whether two values are deeply equal.
+func deepEqual(left, right any) bool {
+	l := normalize(left)
+	r := normalize(right)
+
+	// Optimization for simple types to prevent allocations
+	switch l.(type) {
+	case float64:
+		if f, ok := r.(float64); ok {
+			return l == f
+		}
+	case string:
+		if s, ok := r.(string); ok {
+			return l == s
+		}
+	}
+
+	// Otherwise, just use the built-in deep equality check.
+	return reflect.DeepEqual(left, right)
 }

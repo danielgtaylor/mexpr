@@ -36,6 +36,8 @@ const (
 	NodeContains
 	NodeStartsWith
 	NodeEndsWith
+	NodeBefore
+	NodeAfter
 	NodeWhere
 )
 
@@ -99,6 +101,10 @@ func (n Node) String() string {
 		return "startsWith"
 	case NodeEndsWith:
 		return "endsWith"
+	case NodeBefore:
+		return "before"
+	case NodeAfter:
+		return "after"
 	case NodeWhere:
 		return "where"
 	}
@@ -161,13 +167,19 @@ func precomputeLiterals(offset uint16, nodeType NodeType, left, right *Node) (*N
 	case NodeMultiply:
 		return &Node{Type: NodeLiteral, Offset: offset, Length: l, Value: leftValue * rightValue}, nil
 	case NodeDivide:
+		if rightValue == 0 {
+			return nil, NewError(offset, 1, "cannot divide by zero")
+		}
 		return &Node{Type: NodeLiteral, Offset: offset, Length: l, Value: leftValue / rightValue}, nil
 	case NodeModulus:
+		if int(rightValue) == 0 {
+			return nil, NewError(offset, 1, "cannot divide by zero")
+		}
 		return &Node{Type: NodeLiteral, Offset: offset, Length: l, Value: float64(int(leftValue) % int(rightValue))}, nil
 	case NodePower:
 		return &Node{Type: NodeLiteral, Offset: offset, Length: l, Value: math.Pow(leftValue, rightValue)}, nil
 	}
-	return nil, NewError(offset, 1, "Can't precompute unknown operator")
+	return nil, NewError(offset, 1, "cannot precompute unknown operator")
 }
 
 // Parser takes a lexer and parses its tokens into an abstract syntax tree.
@@ -210,6 +222,9 @@ func (p *parser) parse(bindingPower int) (*Node, Error) {
 	}
 	currentToken := *p.token
 	for bindingPower < bindingPowers[currentToken.Type] {
+		if leftNode == nil {
+			return nil, nil
+		}
 		if err := p.advance(); err != nil {
 			return nil, err
 		}
@@ -389,6 +404,10 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 			nodeType = NodeStartsWith
 		case "endsWith":
 			nodeType = NodeEndsWith
+		case "before":
+			nodeType = NodeBefore
+		case "after":
+			nodeType = NodeAfter
 		}
 		return p.newNodeParseRight(n, t, nodeType, bindingPowers[t.Type])
 	case TokenWhere:
@@ -416,7 +435,9 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 }
 
 func (p *parser) Parse() (*Node, Error) {
-	p.advance()
+	if err := p.advance(); err != nil {
+		return nil, err
+	}
 	n, err := p.parse(0)
 	return p.ensure(n, err, TokenEOF)
 }

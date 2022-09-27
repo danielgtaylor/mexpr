@@ -45,6 +45,8 @@ func TestInterpreter(t *testing.T) {
 		{expr: "1 != 2", output: true},
 		{expr: "x.length == 3", input: `{"x": "abc"}`, output: true},
 		{expr: `19 % 5 == 4`, output: true},
+		{expr: `foo == 1`, input: `{"foo": []}`, output: false},
+		{expr: `foo == 1`, input: `{"foo": {}}`, output: false},
 		// Boolean comparisons
 		{expr: "1 < 2 and 1 > 2", output: false},
 		{expr: "1 < 2 and 2 > 1", output: true},
@@ -104,6 +106,11 @@ func TestInterpreter(t *testing.T) {
 		{expr: `"foo" endsWith "f"`, output: false},
 		{expr: `"foo" endsWith "o"`, output: true},
 		{expr: `"id1" endsWith 1`, output: true},
+		// Before / after
+		{expr: `start before end`, input: `{"start": "2022-01-01T12:00:00Z", "end": "2022-01-01T23:59:59Z"}`, output: true},
+		{expr: `start before end`, input: `{"start": "2022-01-01T12:00:00", "end": "2022-01-01T23:59:59"}`, output: true},
+		{expr: `start before end`, input: `{"start": "2022-01-01", "end": "2022-01-02"}`, output: true},
+		{expr: `start after end`, input: `{"start": "2022-01-01T12:00:00Z", "end": "2022-01-01T23:59:59Z"}`, output: false},
 		// Length
 		{expr: `"foo".length`, output: 3},
 		{expr: `str.length`, input: `{"str": "abcdef"}`, output: 6},
@@ -126,6 +133,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: "6 -", err: "incomplete expression"},
 		{expr: `foo.bar + "baz"`, input: `{"foo": 1}`, err: "no property bar"},
 		{expr: `foo + 1`, input: `{"foo": [1, 2]}`, err: "cannot operate on incompatible types"},
+		{expr: `foo > 1`, input: `{"foo": []}`, err: "cannot compare array with number"},
 		{expr: `foo[1-]`, input: `{"foo": "hello"}`, err: "unexpected right-bracket"},
 		{expr: `not (1- <= 5)`, err: "missing right operand"},
 		{expr: `(1 >=)`, err: "unexpected right-paren"},
@@ -138,6 +146,8 @@ func TestInterpreter(t *testing.T) {
 		{expr: `0.5 > "some kind of string"`, err: "unable to convert to number"},
 		{expr: `foo beginswith "bar"`, input: `{"foo": "bar"}`, err: "expected eof"},
 		{expr: `1 / (foo * 1)`, input: `{"foo": 0}`, err: "cannot divide by zero"},
+		{expr: `1 before "2020-01-01"`, err: "unable to convert 1 to date or time"},
+		{expr: `"2020-01-01" after "invalid"`, err: "unable to convert invalid to date or time"},
 	}
 
 	for _, tc := range cases {
@@ -179,6 +189,22 @@ func TestInterpreter(t *testing.T) {
 			}
 		})
 	}
+}
+
+func FuzzMexpr(f *testing.F) {
+	f.Fuzz(func(t *testing.T, s string) {
+		Eval(s, nil)
+		Eval(s, map[string]any{
+			"b": true,
+			"i": 5,
+			"f": 1.0,
+			"s": "Hello",
+			"a": []any{false, 1, "a"},
+			"o": map[string]any{
+				"prop": 123,
+			},
+		})
+	})
 }
 
 func Benchmark(b *testing.B) {

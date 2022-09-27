@@ -135,6 +135,8 @@ Non-boolean values are converted to booleans. The following result in `true`:
 - Indexing, e.g. `foo[0]`
 - Slicing, e.g. `foo[1:2]` or `foo[2:]`
 - `.length` pseudo-property, e.g. `foo.length`
+- `.lower` pseudo-property for lowercase, e.g. `foo.lower`
+- `.upper` pseudo-property for uppercase, e.g. `foo.upper`
 - `+` (concatenation)
 - `in` e.g. `"f" in "foo"`
 - `contains` e.g. `"foo" contains "f"`
@@ -146,6 +148,13 @@ Indexes are zero-based. Slice indexes are optional and are _inclusive_. `foo[1:2
 Any value concatenated with a string will result in a string. For example `"id" + 1` will result in `"id1"`.
 
 There is no distinction between strings, bytes, or runes. Everything is treated as a string.
+
+#### Date Comparisons
+
+String dates & times can be compared if they follow RFC 3339 / ISO 8601 with or without timezones.
+
+- `before`, e.g. `start before "2020-01-01"`
+- `after`, e.g. `created after "2020-01-01T12:00:00Z"`
 
 ### Array/slice operators
 
