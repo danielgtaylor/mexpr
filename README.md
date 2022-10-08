@@ -67,6 +67,23 @@ if err != nil {
 }
 ```
 
+### Options
+
+When running the interpreter a set of options can be passed in to change behavior. Available options:
+
+| Option            | Default | Description                                                                                        |
+| ----------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `StrictMode`      | `false` | Be more strict, for example return an error when an identifier is not found rather than `nil`      |
+| `UnquotedStrings` | `false` | Enable the use of unquoted strings, i.e. return a string instead of `nil` for undefined parameters |
+
+```go
+// Using the top-level eval
+mexpr.Eval(expression, inputObj, StrictMode)
+
+// Using an interpreter instance
+interpreter.Run(inputObj, StrictMode)
+```
+
 ## Syntax
 
 ### Literals

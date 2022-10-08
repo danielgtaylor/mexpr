@@ -12,6 +12,11 @@ type InterpreterOption int
 const (
 	// StrictMode does extra checks like making sure identifiers exist.
 	StrictMode InterpreterOption = iota
+
+	// UnqoutedStrings enables the use of unquoted string values rather than
+	// returning nil or a missing identifier error. Identifiers get priority
+	// over unquoted strings.
+	UnquotedStrings
 )
 
 // checkBounds returns an error if the index is out of bounds.
@@ -37,22 +42,29 @@ type Interpreter interface {
 // NewInterpreter returns an interpreter for the given AST.
 func NewInterpreter(ast *Node, options ...InterpreterOption) Interpreter {
 	strict := false
+	unquoted := false
 
 	for _, opt := range options {
-		if opt == StrictMode {
+		switch opt {
+		case StrictMode:
 			strict = true
+		case UnquotedStrings:
+			unquoted = true
 		}
 	}
 
 	return &interpreter{
-		ast:    ast,
-		strict: strict,
+		ast:      ast,
+		strict:   strict,
+		unquoted: unquoted,
 	}
 }
 
 type interpreter struct {
-	ast    *Node
-	strict bool
+	ast             *Node
+	prevFieldSelect bool
+	strict          bool
+	unquoted        bool
 }
 
 func (i *interpreter) Run(value any) (any, Error) {
@@ -87,20 +99,23 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			}
 		}
 		if m, ok := value.(map[string]any); ok {
-			if !i.strict {
-				return m[ast.Value.(string)], nil
-			}
 			if v, ok := m[ast.Value.(string)]; ok {
 				return v, nil
 			}
 		}
 		if m, ok := value.(map[any]any); ok {
-			if !i.strict {
-				return m[ast.Value], nil
-			}
 			if v, ok := m[ast.Value]; ok {
 				return v, nil
 			}
+		}
+		if i.unquoted && !i.prevFieldSelect {
+			// Identifiers not found in the map are treated as strings, but only if
+			// the previous item was not a `.` like `obj.field`.
+			return ast.Value.(string), nil
+		}
+		i.prevFieldSelect = false
+		if !i.strict {
+			return nil, nil
 		}
 		return nil, NewError(ast.Offset, ast.Length, "cannot get %v from %v", ast.Value, value)
 	case NodeFieldSelect:
@@ -108,6 +123,7 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		if err != nil {
 			return nil, err
 		}
+		i.prevFieldSelect = true
 		return i.run(ast.Right, leftValue)
 	case NodeArrayIndex:
 		resultLeft, err := i.run(ast.Left, value)
