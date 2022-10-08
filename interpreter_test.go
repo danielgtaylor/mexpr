@@ -12,6 +12,8 @@ func TestInterpreter(t *testing.T) {
 	type test struct {
 		expr   string
 		input  string
+		skipTC bool
+		opts   []InterpreterOption
 		err    string
 		output interface{}
 	}
@@ -68,6 +70,17 @@ func TestInterpreter(t *testing.T) {
 		{expr: `foo[0]`, input: `{"foo": "hello"}`, output: "h"},
 		{expr: `foo[-1]`, input: `{"foo": "hello"}`, output: "o"},
 		{expr: `foo[0:-3]`, input: `{"foo": "hello"}`, output: "hel"},
+		// Unquoted strings
+		{expr: `"foo" == foo`, output: false},
+		{expr: `"foo" == foo`, opts: []InterpreterOption{UnquotedStrings}, output: true},
+		{expr: `"foo" == bar`, opts: []InterpreterOption{UnquotedStrings}, output: false},
+		{expr: `foo == foo`, opts: []InterpreterOption{UnquotedStrings}, output: true},
+		{expr: `foo == foo`, opts: []InterpreterOption{UnquotedStrings, StrictMode}, output: true},
+		{expr: `foo + 1`, opts: []InterpreterOption{UnquotedStrings}, output: "foo1"},
+		{expr: `@.foo + 1`, opts: []InterpreterOption{UnquotedStrings}, err: "cannot add incompatible types"},
+		{expr: `@.foo + 1`, opts: []InterpreterOption{UnquotedStrings, StrictMode}, err: "cannot get foo"},
+		{expr: `foo.bar == bar`, opts: []InterpreterOption{UnquotedStrings}, output: false},
+		{expr: `foo.bar == bar`, skipTC: true, opts: []InterpreterOption{UnquotedStrings}, input: `{"foo": {}}`, output: false},
 		// Identifier / fields
 		{expr: "foo", input: `{"foo": 1.0}`, output: 1.0},
 		{expr: "foo.bar.baz", input: `{"foo": {"bar": {"baz": 1.0}}}`, output: 1.0},
@@ -158,7 +171,12 @@ func TestInterpreter(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			ast, err := Parse(tc.expr, input)
+			types := input
+			if tc.skipTC {
+				// Skip type check
+				types = nil
+			}
+			ast, err := Parse(tc.expr, types)
 
 			if tc.err != "" {
 				if err != nil {
@@ -172,7 +190,7 @@ func TestInterpreter(t *testing.T) {
 					t.Fatal(err.Pretty(tc.expr))
 				}
 			}
-			result, err := Run(ast, input)
+			result, err := Run(ast, input, tc.opts...)
 			if tc.err != "" {
 				if err == nil {
 					t.Fatal("expected error but found none")
