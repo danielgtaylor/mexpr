@@ -159,6 +159,9 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				if err := checkBounds(ast, left, int(end)); err != nil {
 					return nil, err
 				}
+				if int(start) > int(end) {
+					return nil, NewError(ast.Offset, ast.Length, "slice start cannot be greater than end")
+				}
 				return left[int(start) : int(end)+1], nil
 			}
 			left := toString(resultLeft)
@@ -170,6 +173,9 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			}
 			if err := checkBounds(ast, left, int(start)); err != nil {
 				return nil, err
+			}
+			if int(start) > int(end) {
+				return nil, NewError(ast.Offset, ast.Length, "string slice start cannot be greater than end")
 			}
 			if err := checkBounds(ast, left, int(end)); err != nil {
 				return nil, err
