@@ -161,6 +161,8 @@ func TestInterpreter(t *testing.T) {
 		{expr: `1 / (foo * 1)`, input: `{"foo": 0}`, err: "cannot divide by zero"},
 		{expr: `1 before "2020-01-01"`, err: "unable to convert 1 to date or time"},
 		{expr: `"2020-01-01" after "invalid"`, err: "unable to convert invalid to date or time"},
+		{expr: `a[2:0]`, input: `{"a": [0, 1, 2]}`, err: "slice start cannot be greater than end"},
+		{expr: `a[2:0]`, input: `{"a": "hello"}`, err: "slice start cannot be greater than end"},
 	}
 
 	for _, tc := range cases {
