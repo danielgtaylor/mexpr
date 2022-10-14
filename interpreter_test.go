@@ -163,6 +163,8 @@ func TestInterpreter(t *testing.T) {
 		{expr: `"2020-01-01" after "invalid"`, err: "unable to convert invalid to date or time"},
 		{expr: `a[2:0]`, input: `{"a": [0, 1, 2]}`, err: "slice start cannot be greater than end"},
 		{expr: `a[2:0]`, input: `{"a": "hello"}`, err: "slice start cannot be greater than end"},
+		{expr: `a[0][-7]`, input: `{"a": [[]]}`, skipTC: true, err: "invalid index"},
+		{expr: `a[0]`, input: `{"a": []}`, skipTC: true, err: "invalid index"},
 	}
 
 	for _, tc := range cases {
