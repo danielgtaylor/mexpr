@@ -137,7 +137,7 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		if err != nil {
 			return nil, err
 		}
-		if isSlice(resultRight) {
+		if isSlice(resultRight) && len(resultRight.([]any)) == 2 {
 			start, err := toNumber(ast, resultRight.([]any)[0])
 			if err != nil {
 				return nil, err

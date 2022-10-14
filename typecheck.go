@@ -26,15 +26,15 @@ func (s *schema) String() string {
 }
 
 func (s *schema) isNumber() bool {
-	return s.typeName == typeNumber
+	return s != nil && s.typeName == typeNumber
 }
 
 func (s *schema) isString() bool {
-	return s.typeName == typeString
+	return s != nil && s.typeName == typeString
 }
 
 func (s *schema) isArray() bool {
-	return s.typeName == typeArray
+	return s != nil && s.typeName == typeArray
 }
 
 var (
