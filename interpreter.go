@@ -76,6 +76,9 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		return nil, nil
 	}
 
+	fromSelect := i.prevFieldSelect
+	i.prevFieldSelect = false
+
 	switch ast.Type {
 	case NodeIdentifier:
 		switch ast.Value.(string) {
@@ -108,12 +111,11 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				return v, nil
 			}
 		}
-		if i.unquoted && !i.prevFieldSelect {
+		if i.unquoted && !fromSelect {
 			// Identifiers not found in the map are treated as strings, but only if
 			// the previous item was not a `.` like `obj.field`.
 			return ast.Value.(string), nil
 		}
-		i.prevFieldSelect = false
 		if !i.strict {
 			return nil, nil
 		}
