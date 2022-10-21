@@ -131,6 +131,7 @@ func TestInterpreter(t *testing.T) {
 		// Lower/Upper
 		{expr: `"foo".upper`, output: "FOO"},
 		{expr: `str.lower`, input: `{"str": "ABCD"}`, output: "abcd"},
+		{expr: `str.lower == abcd`, input: `{"str": "ABCD"}`, opts: []InterpreterOption{UnquotedStrings}, skipTC: true, output: true},
 		// Where
 		{expr: `items where id > 3`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: []interface{}{map[string]interface{}{"id": 5.0}, map[string]interface{}{"id": 7.0}}},
 		{expr: `items where id > 3 where labels contains "foo"`, input: `{"items": [{"id": 1, "labels": ["foo"]}, {"id": 3}, {"id": 5, "labels": ["foo"]}, {"id": 7}]}`, output: []interface{}{map[string]interface{}{"id": 5.0, "labels": []interface{}{"foo"}}}},
@@ -194,6 +195,7 @@ func TestInterpreter(t *testing.T) {
 					t.Fatal(err.Pretty(tc.expr))
 				}
 			}
+			t.Log("graph G {\n" + ast.Dot("") + "\n}")
 			result, err := Run(ast, input, tc.opts...)
 			if tc.err != "" {
 				if err == nil {
