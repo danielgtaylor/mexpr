@@ -430,6 +430,9 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			return nil, err
 		}
 		results := []any{}
+		if resultLeft == nil {
+			return nil, nil
+		}
 		for _, item := range resultLeft.([]any) {
 			resultRight, _ := i.run(ast.Right, item)
 			if i.strict && err != nil {
