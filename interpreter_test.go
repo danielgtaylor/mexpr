@@ -81,6 +81,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: `@.foo + 1`, opts: []InterpreterOption{UnquotedStrings, StrictMode}, err: "cannot get foo"},
 		{expr: `foo.bar == bar`, opts: []InterpreterOption{UnquotedStrings}, output: false},
 		{expr: `foo.bar == bar`, skipTC: true, opts: []InterpreterOption{UnquotedStrings}, input: `{"foo": {}}`, output: false},
+		{expr: `foo.bar == baz`, opts: []InterpreterOption{UnquotedStrings}, input: `{"foo": {"bar": "baz"}}`, output: true},
 		// Identifier / fields
 		{expr: "foo", input: `{"foo": 1.0}`, output: 1.0},
 		{expr: "foo.bar.baz", input: `{"foo": {"bar": {"baz": 1.0}}}`, output: 1.0},
@@ -137,6 +138,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: `items where id > 3 where labels contains "foo"`, input: `{"items": [{"id": 1, "labels": ["foo"]}, {"id": 3}, {"id": 5, "labels": ["foo"]}, {"id": 7}]}`, output: []interface{}{map[string]interface{}{"id": 5.0, "labels": []interface{}{"foo"}}}},
 		{expr: `(items where id > 3).length == 2`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: true},
 		{expr: `not (items where id > 3)`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: false},
+		{expr: `items where id > 3`, input: `{}`, skipTC: true, output: nil},
 		// Order of operations
 		{expr: "1 + 2 + 3", output: 6.0},
 		{expr: "1 + 2 * 3", output: 7.0},
@@ -181,7 +183,7 @@ func TestInterpreter(t *testing.T) {
 				// Skip type check
 				types = nil
 			}
-			ast, err := Parse(tc.expr, types)
+			ast, err := Parse(tc.expr, types, tc.opts...)
 
 			if tc.err != "" {
 				if err != nil {

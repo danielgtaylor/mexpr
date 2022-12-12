@@ -85,14 +85,26 @@ type TypeChecker interface {
 }
 
 // NewTypeChecker returns a type checker for the given AST.
-func NewTypeChecker(ast *Node) TypeChecker {
+func NewTypeChecker(ast *Node, options ...InterpreterOption) TypeChecker {
+	unquoted := false
+
+	for _, opt := range options {
+		switch opt {
+		case UnquotedStrings:
+			unquoted = true
+		}
+	}
+
 	return &typeChecker{
-		ast: ast,
+		ast:      ast,
+		unquoted: unquoted,
 	}
 }
 
 type typeChecker struct {
-	ast *Node
+	ast             *Node
+	prevFieldSelect bool
+	unquoted        bool
 }
 
 func (i *typeChecker) Run(value any) Error {
@@ -113,6 +125,9 @@ func (i *typeChecker) runBoth(ast *Node, value any) (*schema, *schema, Error) {
 }
 
 func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
+	fromSelect := i.prevFieldSelect
+	i.prevFieldSelect = false
+
 	switch ast.Type {
 	case NodeIdentifier:
 		switch ast.Value.(string) {
@@ -126,12 +141,17 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 		case "lower", "upper":
 			return schemaString, nil
 		}
+		errValue := value
 		if s, ok := value.(*schema); ok {
 			if v, ok := s.properties[ast.Value.(string)]; ok {
 				return v, nil
 			}
+			keys := []string{}
+			for k := range s.properties {
+				keys = append(keys, k)
+			}
+			errValue = "map with keys [" + strings.Join(keys, ", ") + "]"
 		}
-		errValue := value
 		if m, ok := value.(map[string]any); ok {
 			if v, ok := m[ast.Value.(string)]; ok {
 				return getSchema(v), nil
@@ -152,12 +172,18 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 			}
 			errValue = "map with keys [" + strings.Join(keys, ", ") + "]"
 		}
+		if i.unquoted && !fromSelect {
+			// Identifiers not found in the map are treated as strings, but only if
+			// the previous item was not a `.` like `obj.field`.
+			return schemaString, nil
+		}
 		return nil, NewError(ast.Offset, ast.Length, "no property %v in %v", ast.Value, errValue)
 	case NodeFieldSelect:
 		leftType, err := i.run(ast.Left, value)
 		if err != nil {
 			return nil, err
 		}
+		i.prevFieldSelect = true
 		return i.run(ast.Right, leftType)
 	case NodeArrayIndex:
 		leftType, rightType, err := i.runBoth(ast, value)

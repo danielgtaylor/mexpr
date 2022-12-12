@@ -4,7 +4,7 @@ package mexpr
 // Parse an expression and return the abstract syntax tree. If `types` is
 // passed, it should be a set of representative example values for the input
 // which will be used to type check the expression against.
-func Parse(expression string, types map[string]interface{}) (*Node, Error) {
+func Parse(expression string, types map[string]interface{}, options ...InterpreterOption) (*Node, Error) {
 	l := NewLexer(expression)
 	p := NewParser(l)
 	ast, err := p.Parse()
@@ -12,7 +12,7 @@ func Parse(expression string, types map[string]interface{}) (*Node, Error) {
 		return nil, err
 	}
 	if types != nil {
-		if err := TypeCheck(ast, types); err != nil {
+		if err := TypeCheck(ast, types, options...); err != nil {
 			return nil, err
 		}
 	}
@@ -21,8 +21,8 @@ func Parse(expression string, types map[string]interface{}) (*Node, Error) {
 
 // TypeCheck will take a parsed AST and type check against the given input
 // structure with representative example values.
-func TypeCheck(ast *Node, types map[string]interface{}) Error {
-	i := NewTypeChecker(ast)
+func TypeCheck(ast *Node, types map[string]interface{}, options ...InterpreterOption) Error {
+	i := NewTypeChecker(ast, options...)
 	return i.Run(types)
 }
 
