@@ -127,6 +127,8 @@ func toBool(v interface{}) bool {
 		return len(n) > 0
 	case map[string]interface{}:
 		return len(n) > 0
+	case map[any]any:
+		return len(n) > 0
 	}
 	return false
 }

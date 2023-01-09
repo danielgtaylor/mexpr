@@ -179,6 +179,7 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 		}
 		return nil, NewError(ast.Offset, ast.Length, "no property %v in %v", ast.Value, errValue)
 	case NodeFieldSelect:
+		i.prevFieldSelect = true
 		leftType, err := i.run(ast.Left, value)
 		if err != nil {
 			return nil, err
@@ -272,6 +273,10 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 		if !leftType.isArray() {
 			return nil, NewError(ast.Offset, ast.Length, "where clause requires an array, but found %s", leftType)
 		}
+		// In an unquoted string scenario it makes no sense for the first/only
+		// token after a `where` clause to be treated as a string. Instead we
+		// treat a `where` the same as a field select `.` in this scenario.
+		i.prevFieldSelect = true
 		_, err = i.run(ast.Right, leftType.items)
 		if err != nil {
 			return nil, err
