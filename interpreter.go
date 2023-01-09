@@ -121,6 +121,7 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		}
 		return nil, NewError(ast.Offset, ast.Length, "cannot get %v from %v", ast.Value, value)
 	case NodeFieldSelect:
+		i.prevFieldSelect = true
 		leftValue, err := i.run(ast.Left, value)
 		if err != nil {
 			return nil, err
@@ -434,6 +435,10 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			return nil, nil
 		}
 		for _, item := range resultLeft.([]any) {
+			// In an unquoted string scenario it makes no sense for the first/only
+			// token after a `where` clause to be treated as a string. Instead we
+			// treat a `where` the same as a field select `.` in this scenario.
+			i.prevFieldSelect = true
 			resultRight, _ := i.run(ast.Right, item)
 			if i.strict && err != nil {
 				return nil, err

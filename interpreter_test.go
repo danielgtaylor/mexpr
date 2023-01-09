@@ -82,6 +82,9 @@ func TestInterpreter(t *testing.T) {
 		{expr: `foo.bar == bar`, opts: []InterpreterOption{UnquotedStrings}, output: false},
 		{expr: `foo.bar == bar`, skipTC: true, opts: []InterpreterOption{UnquotedStrings}, input: `{"foo": {}}`, output: false},
 		{expr: `foo.bar == baz`, opts: []InterpreterOption{UnquotedStrings}, input: `{"foo": {"bar": "baz"}}`, output: true},
+		{expr: `(items where foo).length == 1`, input: `{"items": [{"foo": 1}, {"bar": 2}, {"baz": 3}]}`, opts: []InterpreterOption{UnquotedStrings}, output: true},
+		{expr: `(items where @.foo).length == 1`, input: `{"items": [{"foo": 1}, {"bar": 2}, {"baz": 3}]}`, opts: []InterpreterOption{UnquotedStrings}, output: true},
+		{expr: `(items where foo in id).length == 1`, input: `{"items": [{"id": "foo123"}, {"id": "bar456"}, {"id": "baz789"}]}`, opts: []InterpreterOption{UnquotedStrings}, output: true},
 		// Identifier / fields
 		{expr: "foo", input: `{"foo": 1.0}`, output: 1.0},
 		{expr: "foo.bar.baz", input: `{"foo": {"bar": {"baz": 1.0}}}`, output: 1.0},

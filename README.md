@@ -22,6 +22,7 @@ Features:
     not (1- <= 5)
     ......^
   ```
+- Fuzz tested to prevent crashes
 
 ## Usage
 
@@ -216,6 +217,7 @@ not (items where id > 3)
 
 ### Map operators
 
+- Accessing values, e.g. `foo.bar.baz`
 - `in` (has key), e.g. `"key" in foo`
 - `contains` e.g. `foo contains "key"`
 
