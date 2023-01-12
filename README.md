@@ -187,7 +187,7 @@ Indexes are zero-based. Slice indexes are optional and are _inclusive_. `foo[1:2
 
 #### Array/slice filtering
 
-A `where` clause can be used to filter the items in an array. The left side of the clause is the array to be filtered, while the right side is an expression to run on each item of the array. If the right side expression evaluates to true then the item is added to the result. For example:
+A `where` clause can be used to filter the items in an array. The left side of the clause is the array to be filtered, while the right side is an expression to run on each item of the array. If the right side expression evaluates to true then the item is added to the result slice. For example:
 
 ```
 // Get a list of items where the item.id is bigger than 3
@@ -220,6 +220,33 @@ not (items where id > 3)
 - Accessing values, e.g. `foo.bar.baz`
 - `in` (has key), e.g. `"key" in foo`
 - `contains` e.g. `foo contains "key"`
+
+#### Map wildcard filtering
+
+A `where` clause can be used as a wildcard key to filter values for all keys in a map. The left side of the clause is the map to be filtered, while the right side is an expression to run on each value of the map. If the right side expression evaluates to true then the value is added to the result slice. For example, given:
+
+```json
+{
+  "operations": {
+    "id1": { "method": "GET", "path": "/op1" },
+    "id2": { "method": "PUT", "path": "/op2" },
+    "id3": { "method": "DELETE", "path": "/op3" }
+  }
+}
+```
+
+You can run:
+
+```
+// Get all operations where the HTTP method is GET
+operations where method == "GET"
+```
+
+And the result would be a slice of matched values:
+
+```json
+[{ "method": "GET", "path": "/op1" }]
+```
 
 ## Performance
 

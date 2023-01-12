@@ -1,7 +1,11 @@
 package mexpr
 
 import (
+	"fmt"
+	"sort"
 	"strings"
+
+	"golang.org/x/exp/maps"
 )
 
 type valueType string
@@ -22,6 +26,12 @@ type schema struct {
 }
 
 func (s *schema) String() string {
+	if s.isArray() {
+		return fmt.Sprintf("%s[%s]", s.typeName, s.items)
+	}
+	if s.isObject() {
+		return fmt.Sprintf("%s{%v}", s.typeName, maps.Keys(s.properties))
+	}
 	return string(s.typeName)
 }
 
@@ -35,6 +45,10 @@ func (s *schema) isString() bool {
 
 func (s *schema) isArray() bool {
 	return s != nil && s.typeName == typeArray
+}
+
+func (s *schema) isObject() bool {
+	return s != nil && s.typeName == typeObject
 }
 
 var (
@@ -270,8 +284,18 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 		if err != nil {
 			return nil, err
 		}
-		if !leftType.isArray() {
-			return nil, NewError(ast.Offset, ast.Length, "where clause requires an array, but found %s", leftType)
+		if leftType.isObject() {
+			keys := maps.Keys(leftType.properties)
+			sort.Strings(keys)
+			if len(keys) > 0 {
+				// Pick the first prop as the representative item type.
+				prop := leftType.properties[keys[0]]
+				leftType = newSchema(typeArray)
+				leftType.items = prop
+			}
+		}
+		if !leftType.isArray() || leftType.items == nil {
+			return nil, NewError(ast.Offset, ast.Length, "where clause requires a non-empty array or object, but found %s", leftType)
 		}
 		// In an unquoted string scenario it makes no sense for the first/only
 		// token after a `where` clause to be treated as a string. Instead we
@@ -289,5 +313,5 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 		}
 		return schemaBool, nil
 	}
-	return nil, NewError(ast.Offset, ast.Length, "unexpected node")
+	return nil, NewError(ast.Offset, ast.Length, "unexpected node %v", ast)
 }
