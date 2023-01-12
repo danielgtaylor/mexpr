@@ -4,7 +4,7 @@ package mexpr
 // Parse an expression and return the abstract syntax tree. If `types` is
 // passed, it should be a set of representative example values for the input
 // which will be used to type check the expression against.
-func Parse(expression string, types map[string]interface{}, options ...InterpreterOption) (*Node, Error) {
+func Parse(expression string, types any, options ...InterpreterOption) (*Node, Error) {
 	l := NewLexer(expression)
 	p := NewParser(l)
 	ast, err := p.Parse()
@@ -13,7 +13,7 @@ func Parse(expression string, types map[string]interface{}, options ...Interpret
 	}
 	if types != nil {
 		if err := TypeCheck(ast, types, options...); err != nil {
-			return nil, err
+			return ast, err
 		}
 	}
 	return ast, nil
@@ -21,13 +21,13 @@ func Parse(expression string, types map[string]interface{}, options ...Interpret
 
 // TypeCheck will take a parsed AST and type check against the given input
 // structure with representative example values.
-func TypeCheck(ast *Node, types map[string]interface{}, options ...InterpreterOption) Error {
+func TypeCheck(ast *Node, types any, options ...InterpreterOption) Error {
 	i := NewTypeChecker(ast, options...)
 	return i.Run(types)
 }
 
 // Run executes an AST with the given input and returns the output.
-func Run(ast *Node, input map[string]interface{}, options ...InterpreterOption) (interface{}, Error) {
+func Run(ast *Node, input any, options ...InterpreterOption) (any, Error) {
 	i := NewInterpreter(ast, options...)
 	return i.Run(input)
 }
@@ -36,7 +36,7 @@ func Run(ast *Node, input map[string]interface{}, options ...InterpreterOption) 
 // expression with the given input. If you plan to execute the expression
 // multiple times consider caching the output of `Parse(...)` instead for a
 // big speed improvement.
-func Eval(expression string, input map[string]interface{}, options ...InterpreterOption) (interface{}, Error) {
+func Eval(expression string, input any, options ...InterpreterOption) (any, Error) {
 	// No need to type check because we are about to run with the input.
 	ast, err := Parse(expression, nil)
 	if err != nil {

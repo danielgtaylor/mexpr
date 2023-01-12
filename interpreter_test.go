@@ -10,12 +10,13 @@ import (
 
 func TestInterpreter(t *testing.T) {
 	type test struct {
-		expr   string
-		input  string
-		skipTC bool
-		opts   []InterpreterOption
-		err    string
-		output interface{}
+		expr        string
+		input       string
+		inputParsed any
+		skipTC      bool
+		opts        []InterpreterOption
+		err         string
+		output      interface{}
 	}
 	cases := []test{
 		// Add/sub
@@ -71,7 +72,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: `foo[-1]`, input: `{"foo": "hello"}`, output: "o"},
 		{expr: `foo[0:-3]`, input: `{"foo": "hello"}`, output: "hel"},
 		// Unquoted strings
-		{expr: `"foo" == foo`, output: false},
+		{expr: `"foo" == foo`, skipTC: true, output: false},
 		{expr: `"foo" == foo`, opts: []InterpreterOption{UnquotedStrings}, output: true},
 		{expr: `"foo" == bar`, opts: []InterpreterOption{UnquotedStrings}, output: false},
 		{expr: `foo == foo`, opts: []InterpreterOption{UnquotedStrings}, output: true},
@@ -132,6 +133,8 @@ func TestInterpreter(t *testing.T) {
 		{expr: `"foo".length`, output: 3},
 		{expr: `str.length`, input: `{"str": "abcdef"}`, output: 6},
 		{expr: `arr.length`, input: `{"arr": [1, 2]}`, output: 2},
+		{expr: `foo.length`, input: `{"foo": {"a": 1, "b": 2}}`, output: 2},
+		{expr: `foo.length`, inputParsed: map[any]any{"foo": map[any]any{"a": 1, "b": 2}}, output: 2},
 		// Lower/Upper
 		{expr: `"foo".upper`, output: "FOO"},
 		{expr: `str.lower`, input: `{"str": "ABCD"}`, output: "abcd"},
@@ -142,6 +145,9 @@ func TestInterpreter(t *testing.T) {
 		{expr: `(items where id > 3).length == 2`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: true},
 		{expr: `not (items where id > 3)`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: false},
 		{expr: `items where id > 3`, input: `{}`, skipTC: true, output: nil},
+		{expr: `foo where method == "GET"`, input: `{"foo": {"op1": {"method": "GET", "path": "/op1"}, "op2": {"method": "PUT", "path": "/op2"}, "op3": {"method": "DELETE", "path": "/op3"}}}`, output: []any{map[string]any{"method": "GET", "path": "/op1"}}},
+		{expr: `foo where method == "GET"`, inputParsed: map[any]any{"foo": map[any]any{"op1": map[any]any{"method": "GET", "path": "/op1"}, "op2": map[any]any{"method": "PUT", "path": "/op2"}, "op3": map[any]any{"method": "DELETE", "path": "/op3"}}}, output: []any{map[any]any{"method": "GET", "path": "/op1"}}},
+		{expr: `items where id > 3`, input: `{"items": []}`, err: "where clause requires a non-empty array or object"},
 		// Order of operations
 		{expr: "1 + 2 + 3", output: 6.0},
 		{expr: "1 + 2 * 3", output: 7.0},
@@ -152,7 +158,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: "6 -", err: "incomplete expression"},
 		{expr: `foo.bar + "baz"`, input: `{"foo": 1}`, err: "no property bar"},
 		{expr: `foo + 1`, input: `{"foo": [1, 2]}`, err: "cannot operate on incompatible types"},
-		{expr: `foo > 1`, input: `{"foo": []}`, err: "cannot compare array with number"},
+		{expr: `foo > 1`, input: `{"foo": []}`, err: "cannot compare array[<nil>] with number"},
 		{expr: `foo[1-]`, input: `{"foo": "hello"}`, err: "unexpected right-bracket"},
 		{expr: `not (1- <= 5)`, err: "missing right operand"},
 		{expr: `(1 >=)`, err: "unexpected right-paren"},
@@ -175,8 +181,10 @@ func TestInterpreter(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.expr, func(t *testing.T) {
-			var input map[string]interface{}
-			if tc.input != "" {
+			var input any
+			if tc.inputParsed != nil {
+				input = tc.inputParsed
+			} else if tc.input != "" {
 				if err := json.Unmarshal([]byte(tc.input), &input); err != nil {
 					t.Fatal(err)
 				}
@@ -187,6 +195,10 @@ func TestInterpreter(t *testing.T) {
 				types = nil
 			}
 			ast, err := Parse(tc.expr, types, tc.opts...)
+
+			if ast != nil {
+				t.Log("graph G {\n" + ast.Dot("") + "\n}")
+			}
 
 			if tc.err != "" {
 				if err != nil {
@@ -200,7 +212,7 @@ func TestInterpreter(t *testing.T) {
 					t.Fatal(err.Pretty(tc.expr))
 				}
 			}
-			t.Log("graph G {\n" + ast.Dot("") + "\n}")
+
 			result, err := Run(ast, input, tc.opts...)
 			if tc.err != "" {
 				if err == nil {
@@ -229,7 +241,7 @@ func FuzzMexpr(f *testing.F) {
 			"f": 1.0,
 			"s": "Hello",
 			"a": []any{false, 1, "a"},
-			"o": map[string]any{
+			"o": map[any]any{
 				"prop": 123,
 			},
 		})

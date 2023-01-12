@@ -3,6 +3,8 @@ package mexpr
 import (
 	"math"
 	"strings"
+
+	"golang.org/x/exp/maps"
 )
 
 // InterpreterOption passes configuration settings when creating a new
@@ -91,6 +93,16 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			}
 			if a, ok := value.([]any); ok {
 				return len(a), nil
+			}
+			if m, ok := value.(map[string]any); ok {
+				if _, ok := m["length"]; !ok {
+					return len(m), nil
+				}
+			}
+			if m, ok := value.(map[any]any); ok {
+				if _, ok := m["length"]; !ok {
+					return len(m), nil
+				}
 			}
 		case "lower":
 			if s, ok := value.(string); ok {
@@ -433,6 +445,16 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		results := []any{}
 		if resultLeft == nil {
 			return nil, nil
+		}
+		if m, ok := resultLeft.(map[string]any); ok {
+			resultLeft = maps.Values(m)
+		}
+		if m, ok := resultLeft.(map[any]any); ok {
+			values := make([]any, 0, len(m))
+			for _, v := range m {
+				values = append(values, v)
+			}
+			resultLeft = values
 		}
 		for _, item := range resultLeft.([]any) {
 			// In an unquoted string scenario it makes no sense for the first/only
