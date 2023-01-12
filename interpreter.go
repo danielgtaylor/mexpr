@@ -94,16 +94,6 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			if a, ok := value.([]any); ok {
 				return len(a), nil
 			}
-			if m, ok := value.(map[string]any); ok {
-				if _, ok := m["length"]; !ok {
-					return len(m), nil
-				}
-			}
-			if m, ok := value.(map[any]any); ok {
-				if _, ok := m["length"]; !ok {
-					return len(m), nil
-				}
-			}
 		case "lower":
 			if s, ok := value.(string); ok {
 				return strings.ToLower(s), nil

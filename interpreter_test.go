@@ -133,8 +133,6 @@ func TestInterpreter(t *testing.T) {
 		{expr: `"foo".length`, output: 3},
 		{expr: `str.length`, input: `{"str": "abcdef"}`, output: 6},
 		{expr: `arr.length`, input: `{"arr": [1, 2]}`, output: 2},
-		{expr: `foo.length`, input: `{"foo": {"a": 1, "b": 2}}`, output: 2},
-		{expr: `foo.length`, inputParsed: map[any]any{"foo": map[any]any{"a": 1, "b": 2}}, output: 2},
 		// Lower/Upper
 		{expr: `"foo".upper`, output: "FOO"},
 		{expr: `str.lower`, input: `{"str": "ABCD"}`, output: "abcd"},

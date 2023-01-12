@@ -218,7 +218,6 @@ not (items where id > 3)
 ### Map operators
 
 - Accessing values, e.g. `foo.bar.baz`
-- `.length` pseudo-property counts pairs in the map, e.g. `foo.length`
 - `in` (has key), e.g. `"key" in foo`
 - `contains` e.g. `foo contains "key"`
 
