@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"golang.org/x/exp/maps"
 )
 
 type valueType string
@@ -19,6 +17,16 @@ const (
 	typeObject  valueType = "object"
 )
 
+// mapKeys returns the keys of the map m.
+// The keys will be in an indeterminate order.
+func mapKeys[M ~map[K]V, K comparable, V any](m M) []K {
+	r := make([]K, 0, len(m))
+	for k := range m {
+		r = append(r, k)
+	}
+	return r
+}
+
 type schema struct {
 	typeName   valueType
 	items      *schema
@@ -30,7 +38,7 @@ func (s *schema) String() string {
 		return fmt.Sprintf("%s[%s]", s.typeName, s.items)
 	}
 	if s.isObject() {
-		return fmt.Sprintf("%s{%v}", s.typeName, maps.Keys(s.properties))
+		return fmt.Sprintf("%s{%v}", s.typeName, mapKeys(s.properties))
 	}
 	return string(s.typeName)
 }
@@ -285,7 +293,7 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 			return nil, err
 		}
 		if leftType.isObject() {
-			keys := maps.Keys(leftType.properties)
+			keys := mapKeys(leftType.properties)
 			sort.Strings(keys)
 			if len(keys) > 0 {
 				// Pick the first prop as the representative item type.

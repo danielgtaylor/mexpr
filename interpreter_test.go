@@ -2,10 +2,9 @@ package mexpr
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestInterpreter(t *testing.T) {
@@ -224,7 +223,9 @@ func TestInterpreter(t *testing.T) {
 				if err != nil {
 					t.Fatal(err.Pretty(tc.expr))
 				}
-				assert.Equal(t, tc.output, result)
+				if !reflect.DeepEqual(tc.output, result) {
+					t.Fatalf("expected %v but found %v", tc.output, result)
+				}
 			}
 		})
 	}
@@ -283,7 +284,9 @@ func Benchmark(b *testing.B) {
 				ast, _ := Parse(bm.mexpr, input)
 				r, _ = Run(ast, input, StrictMode)
 			}
-			assert.Equal(b, bm.result, r)
+			if !reflect.DeepEqual(bm.result, r) {
+				b.Fatalf("expected %v but found %v", bm.result, r)
+			}
 		})
 
 		// b.Run(" expr-"+bm.name+"-slow", func(b *testing.B) {
@@ -299,13 +302,17 @@ func Benchmark(b *testing.B) {
 		b.Run("mexpr-"+bm.name+"-cached", func(b *testing.B) {
 			b.ReportAllocs()
 			ast, err := Parse(bm.mexpr, input)
-			assert.NoError(b, err)
+			if err != nil {
+				b.Fatal(err)
+			}
 			i := NewInterpreter(ast)
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
 				r, _ = i.Run(input)
 			}
-			assert.Equal(b, bm.result, r)
+			if !reflect.DeepEqual(bm.result, r) {
+				b.Fatalf("expected %v but found %v", bm.result, r)
+			}
 		})
 
 		// b.Run(" expr-"+bm.name+"-cached", func(b *testing.B) {
