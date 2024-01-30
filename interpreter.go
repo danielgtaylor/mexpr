@@ -3,8 +3,6 @@ package mexpr
 import (
 	"math"
 	"strings"
-
-	"golang.org/x/exp/maps"
 )
 
 // InterpreterOption passes configuration settings when creating a new
@@ -20,6 +18,16 @@ const (
 	// over unquoted strings.
 	UnquotedStrings
 )
+
+// mapValues returns the values of the map m.
+// The values will be in an indeterminate order.
+func mapValues[M ~map[K]V, K comparable, V any](m M) []V {
+	r := make([]V, 0, len(m))
+	for _, v := range m {
+		r = append(r, v)
+	}
+	return r
+}
 
 // checkBounds returns an error if the index is out of bounds.
 func checkBounds(ast *Node, input any, idx int) Error {
@@ -437,7 +445,7 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			return nil, nil
 		}
 		if m, ok := resultLeft.(map[string]any); ok {
-			resultLeft = maps.Values(m)
+			resultLeft = mapValues(m)
 		}
 		if m, ok := resultLeft.(map[any]any); ok {
 			values := make([]any, 0, len(m))
