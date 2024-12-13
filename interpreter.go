@@ -454,17 +454,19 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			}
 			resultLeft = values
 		}
-		for _, item := range resultLeft.([]any) {
-			// In an unquoted string scenario it makes no sense for the first/only
-			// token after a `where` clause to be treated as a string. Instead we
-			// treat a `where` the same as a field select `.` in this scenario.
-			i.prevFieldSelect = true
-			resultRight, _ := i.run(ast.Right, item)
-			if i.strict && err != nil {
-				return nil, err
-			}
-			if toBool(resultRight) {
-				results = append(results, item)
+		if leftSlice, ok := resultLeft.([]any); ok {
+			for _, item := range leftSlice {
+				// In an unquoted string scenario it makes no sense for the first/only
+				// token after a `where` clause to be treated as a string. Instead we
+				// treat a `where` the same as a field select `.` in this scenario.
+				i.prevFieldSelect = true
+				resultRight, err := i.run(ast.Right, item)
+				if i.strict && err != nil {
+					return nil, err
+				}
+				if toBool(resultRight) {
+					results = append(results, item)
+				}
 			}
 		}
 		return results, nil
