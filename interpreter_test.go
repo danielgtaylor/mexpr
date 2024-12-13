@@ -145,6 +145,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: `foo where method == "GET"`, input: `{"foo": {"op1": {"method": "GET", "path": "/op1"}, "op2": {"method": "PUT", "path": "/op2"}, "op3": {"method": "DELETE", "path": "/op3"}}}`, output: []any{map[string]any{"method": "GET", "path": "/op1"}}},
 		{expr: `foo where method == "GET"`, inputParsed: map[any]any{"foo": map[any]any{"op1": map[any]any{"method": "GET", "path": "/op1"}, "op2": map[any]any{"method": "PUT", "path": "/op2"}, "op3": map[any]any{"method": "DELETE", "path": "/op3"}}}, output: []any{map[any]any{"method": "GET", "path": "/op1"}}},
 		{expr: `items where id > 3`, input: `{"items": []}`, err: "where clause requires a non-empty array or object"},
+		{expr: `items where id > 3`, input: `{"items": 1}`, skipTC: true, output: []any{}},
 		// Order of operations
 		{expr: "1 + 2 + 3", output: 6.0},
 		{expr: "1 + 2 * 3", output: 7.0},
