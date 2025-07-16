@@ -96,6 +96,9 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			return value, nil
 		case "length":
 			// Special pseudo-property to get the value's length.
+			if s, ok := value.(func() string); ok {
+				return len(s()), nil
+			}
 			if s, ok := value.(string); ok {
 				return len(s), nil
 			}
@@ -103,17 +106,34 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				return len(a), nil
 			}
 		case "lower":
+			if s, ok := value.(func() string); ok {
+				return strings.ToLower(s()), nil
+			}
 			if s, ok := value.(string); ok {
 				return strings.ToLower(s), nil
 			}
 		case "upper":
+			if s, ok := value.(func() string); ok {
+				return strings.ToUpper(s()), nil
+			}
 			if s, ok := value.(string); ok {
 				return strings.ToUpper(s), nil
 			}
 		}
 		if m, ok := value.(map[string]any); ok {
 			if v, ok := m[ast.Value.(string)]; ok {
-				return v, nil
+				switch n := v.(type) {
+				case func() int:
+					return n(), nil
+				case func() float64:
+					return n(), nil
+				case func() bool:
+					return n(), nil
+				case func() string:
+					return n(), nil
+				default:
+					return v, nil
+				}
 			}
 		}
 		if m, ok := value.(map[any]any); ok {
@@ -335,11 +355,21 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		if err != nil {
 			return nil, err
 		}
+		left := toBool(resultLeft)
+		switch ast.Type {
+		case NodeAnd:
+			if !left {
+				return left, nil
+			}
+		case NodeOr:
+			if left {
+				return left, nil
+			}
+		}
 		resultRight, err := i.run(ast.Right, value)
 		if err != nil {
 			return nil, err
 		}
-		left := toBool(resultLeft)
 		right := toBool(resultRight)
 		switch ast.Type {
 		case NodeAnd:
@@ -470,6 +500,75 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			}
 		}
 		return results, nil
+	case NodeFunctionCall:
+		funcName := ast.Left.Value.(string)
+		if m, ok := value.(map[string]any); ok {
+			if fn, ok := m[funcName]; ok {
+				// Get function parameters
+				params := []any{}
+				for _, param := range ast.Value.([]Node) {
+					paramValue, err := i.run(&param, value)
+					if err != nil {
+						return nil, err
+					}
+					params = append(params, paramValue)
+				}
+
+				// Execute function based on parameter count
+				switch f := fn.(type) {
+				case func() any:
+					if len(params) != 0 {
+						return nil, NewError(ast.Offset, ast.Length, "function %s expects 0 parameter, got %d", funcName, len(params))
+					}
+					result := f()
+					switch result.(type) {
+					case error:
+						return nil, NewError(ast.Offset, ast.Length, "Runtime error: %v", result.(error))
+					default:
+						return result, nil
+					}
+				case func(any) any:
+					if len(params) != 1 {
+						return nil, NewError(ast.Offset, ast.Length, "function %s expects 1 parameter, got %d", funcName, len(params))
+					}
+					result := f(params[0])
+					switch result.(type) {
+					case error:
+						return nil, NewError(ast.Offset, ast.Length, "Runtime error: %v", result.(error))
+					default:
+						return result, nil
+					}
+				case func(any, any) any:
+					if len(params) != 2 {
+						return nil, NewError(ast.Offset, ast.Length, "function %s expects 2 parameters, got %d", funcName, len(params))
+					}
+					result := f(params[0], params[1])
+					switch result.(type) {
+					case error:
+						return nil, NewError(ast.Offset, ast.Length, "Runtime error: %v", result.(error))
+					default:
+						return result, nil
+					}
+				case func(any, any, any) any:
+					if len(params) != 3 {
+						return nil, NewError(ast.Offset, ast.Length, "function %s expects 3 parameters, got %d", funcName, len(params))
+					}
+					result := f(params[0], params[1], params[2])
+					switch result.(type) {
+					case error:
+						return nil, NewError(ast.Offset, ast.Length, "Runtime error: %v", result.(error))
+					default:
+						return result, nil
+					}
+
+				}
+				return nil, NewError(ast.Offset, ast.Length, "unsupported function type for %s", funcName)
+			}
+		}
+		if i.strict {
+			return nil, NewError(ast.Offset, ast.Length, "function %s not found", funcName)
+		}
+		return nil, nil
 	}
 	return nil, nil
 }

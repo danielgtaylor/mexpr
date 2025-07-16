@@ -31,6 +31,7 @@ const (
 	TokenStringCompare
 	TokenWhere
 	TokenEOF
+	TokenComma // New token type for separating function parameters
 )
 
 func (t TokenType) String() string {
@@ -73,6 +74,8 @@ func (t TokenType) String() string {
 		return "where"
 	case TokenEOF:
 		return "eof"
+	case TokenComma:
+		return "comma"
 	}
 	return "unknown"
 }
@@ -97,6 +100,8 @@ func basic(input rune) TokenType {
 		return TokenMulDiv
 	case '^':
 		return TokenPower
+	case ',':
+		return TokenComma
 	}
 
 	return TokenUnknown

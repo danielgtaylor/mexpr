@@ -39,6 +39,7 @@ const (
 	NodeBefore
 	NodeAfter
 	NodeWhere
+	NodeFunctionCall
 )
 
 // Node is a unit of the binary tree that makes up the abstract syntax tree.
@@ -144,6 +145,7 @@ var bindingPowers = map[TokenType]int{
 	TokenPower:         50,
 	TokenLeftBracket:   60,
 	TokenLeftParen:     70,
+	TokenComma:         1, // Low binding power for parameter lists
 }
 
 // precomputeLiterals takes two `NodeLiteral` nodes and a math operation and
@@ -430,6 +432,63 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 		}
 		nn.Value = []interface{}{0.0, 0.0}
 		return nn, nil
+	case TokenLeftParen:
+		// Only treat as function call if left node is identifier
+		if n.Type != NodeIdentifier {
+			return nil, NewError(t.Offset, t.Length, "unexpected left parenthesis")
+		}
+
+		// Parse function parameters
+		params := []Node{}
+		offset := t.Offset
+
+		// Handle empty parameter list
+		if p.token.Type == TokenRightParen {
+			if err := p.advance(); err != nil {
+				return nil, err
+			}
+			return &Node{
+				Type:   NodeFunctionCall,
+				Left:   n,
+				Value:  params,
+				Offset: offset,
+				Length: uint8(p.token.Offset + uint16(p.token.Length) - offset),
+			}, nil
+		}
+
+		// Parse parameters
+		for {
+			param, err := p.parse(bindingPowers[TokenComma])
+			if err != nil {
+				return nil, err
+			}
+			if param == nil {
+				return nil, NewError(p.token.Offset, p.token.Length, "expected parameter")
+			}
+			params = append(params, *param)
+
+			if p.token.Type == TokenRightParen {
+				if err := p.advance(); err != nil {
+					return nil, err
+				}
+				break
+			}
+
+			if p.token.Type != TokenComma {
+				return nil, NewError(p.token.Offset, p.token.Length, "expected comma or right parenthesis")
+			}
+			if err := p.advance(); err != nil {
+				return nil, err
+			}
+		}
+
+		return &Node{
+			Type:   NodeFunctionCall,
+			Left:   n,
+			Value:  params,
+			Offset: offset,
+			Length: uint8(p.token.Offset + uint16(p.token.Length) - offset),
+		}, nil
 	}
 	return nil, NewError(t.Offset, t.Length, "unexpected token %s", t.Type)
 }
