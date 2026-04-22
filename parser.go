@@ -108,6 +108,8 @@ func (n Node) String() string {
 		return "after"
 	case NodeWhere:
 		return "where"
+	case NodeFunctionCall:
+		return "()"
 	}
 
 	return ""
@@ -145,7 +147,7 @@ var bindingPowers = map[TokenType]int{
 	TokenPower:         50,
 	TokenLeftBracket:   60,
 	TokenLeftParen:     70,
-	TokenComma:         1, // Low binding power for parameter lists
+	TokenComma:         1,
 }
 
 // precomputeLiterals takes two `NodeLiteral` nodes and a math operation and
@@ -433,16 +435,12 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 		nn.Value = []interface{}{0.0, 0.0}
 		return nn, nil
 	case TokenLeftParen:
-		// Only treat as function call if left node is identifier
 		if n.Type != NodeIdentifier {
 			return nil, NewError(t.Offset, t.Length, "unexpected left parenthesis")
 		}
 
-		// Parse function parameters
 		params := []Node{}
 		offset := t.Offset
-
-		// Handle empty parameter list
 		if p.token.Type == TokenRightParen {
 			if err := p.advance(); err != nil {
 				return nil, err
@@ -456,7 +454,6 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 			}, nil
 		}
 
-		// Parse parameters
 		for {
 			param, err := p.parse(bindingPowers[TokenComma])
 			if err != nil {

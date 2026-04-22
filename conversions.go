@@ -12,9 +12,11 @@ func isNumber(v interface{}) bool {
 		return true
 	case float32, float64:
 		return true
-	case func() int:
+	case func() int, func() int8, func() int16, func() int32, func() int64:
 		return true
-	case func() float64:
+	case func() uint, func() uint8, func() uint16, func() uint32, func() uint64:
+		return true
+	case func() float32, func() float64:
 		return true
 	}
 	return false
@@ -48,6 +50,26 @@ func toNumber(ast *Node, v interface{}) (float64, Error) {
 		return float64(n), nil
 	case func() int:
 		return float64(n()), nil
+	case func() int8:
+		return float64(n()), nil
+	case func() int16:
+		return float64(n()), nil
+	case func() int32:
+		return float64(n()), nil
+	case func() int64:
+		return float64(n()), nil
+	case func() uint:
+		return float64(n()), nil
+	case func() uint8:
+		return float64(n()), nil
+	case func() uint16:
+		return float64(n()), nil
+	case func() uint32:
+		return float64(n()), nil
+	case func() uint64:
+		return float64(n()), nil
+	case func() float32:
+		return float64(n()), nil
 	case func() float64:
 		return n(), nil
 	}
@@ -57,6 +79,8 @@ func toNumber(ast *Node, v interface{}) (float64, Error) {
 func isString(v interface{}) bool {
 	switch v.(type) {
 	case string, rune, byte, []byte:
+		return true
+	case func() string:
 		return true
 	}
 	return false
@@ -174,7 +198,31 @@ func normalize(v interface{}) interface{} {
 		return string(n)
 	case func() int:
 		return float64(n())
+	case func() int8:
+		return float64(n())
+	case func() int16:
+		return float64(n())
+	case func() int32:
+		return float64(n())
+	case func() int64:
+		return float64(n())
+	case func() uint:
+		return float64(n())
+	case func() uint8:
+		return float64(n())
+	case func() uint16:
+		return float64(n())
+	case func() uint32:
+		return float64(n())
+	case func() uint64:
+		return float64(n())
+	case func() float32:
+		return float64(n())
 	case func() float64:
+		return n()
+	case func() string:
+		return n()
+	case func() bool:
 		return n()
 	}
 

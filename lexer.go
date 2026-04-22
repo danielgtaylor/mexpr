@@ -31,7 +31,7 @@ const (
 	TokenStringCompare
 	TokenWhere
 	TokenEOF
-	TokenComma // New token type for separating function parameters
+	TokenComma
 )
 
 func (t TokenType) String() string {

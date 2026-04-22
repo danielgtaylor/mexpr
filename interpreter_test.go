@@ -2,7 +2,6 @@ package mexpr
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -233,119 +232,62 @@ func TestInterpreter(t *testing.T) {
 	}
 }
 
-func TestFunctions(t *testing.T) {
-
-	varMap := make(map[string]interface{})
-
-	varMap["func0"] = func() any {
-		return 43.0
-	}
-
-	varMap["func1"] = func(param1 any) any {
-		switch param1.(type) {
-		case float64:
-			return param1.(float64) * 2
-		default:
-			return fmt.Errorf("Invalid type for param1")
-		}
-	}
-
-	varMap["func2"] = func(param1 any, param2 any) any {
-		switch param1.(type) {
-		case float64:
-			switch param2.(type) {
-			case float64:
-				return param1.(float64) * param2.(float64)
-			default:
-				return fmt.Errorf("Invalid type for param2")
-			}
-		default:
-			return fmt.Errorf("Invalid type for param1")
-		}
-	}
-
-	varMap["func3"] = func(param1 any, param2 any, param3 any) any {
-		switch param1.(type) {
-		case float64:
-			switch param2.(type) {
-			case float64:
-				switch param3.(type) {
-				case float64:
-					return param1.(float64) * param2.(float64) * param3.(float64)
-				default:
-					return fmt.Errorf("Invalid type for param3")
-				}
-			default:
-				return fmt.Errorf("Invalid type for param2")
-			}
-		default:
-			return fmt.Errorf("Invalid type for param1")
-		}
+func TestTypedFunctions(t *testing.T) {
+	input := map[string]any{
+		"add":     func(a, b int) int { return a + b },
+		"ratio":   func(a int, b float64) float64 { return float64(a) / b },
+		"isAdmin": func(role string) bool { return role == "admin" },
+		"concat":  func(left, right string) string { return left + right },
+		"id":      func() int { return 123 },
+		"name":    func() string { return "MEXPR" },
+		"enabled": func() bool { return true },
+		"a":       2,
+		"b":       3,
+		"role":    "admin",
+		"prefix":  "m",
+		"suffix":  "expr",
 	}
 
 	type test struct {
 		expr   string
-		output interface{}
+		output any
 		err    string
 	}
+
 	cases := []test{
-		{expr: "func0()", output: 43.0},
-		{expr: "func1(42)", output: 84.0},
-		{expr: "func2(3,4)", output: 12.0},
-		{expr: "func3(2,3,4)", output: 24.0},
-		{expr: "func0(42)", err: "expects 0 parameter"},
-		{expr: "func1()", err: "expects 1 parameter"},
-		{expr: "func1(1,2)", err: "expects 1 parameter"},
-		{expr: "func2()", err: "expects 2 parameters"},
-		{expr: "func2(1)", err: "expects 2 parameters"},
-		{expr: "func2(1,2,3)", err: "expects 2 parameters"},
-		{expr: "func3()", err: "expects 3 parameters"},
-		{expr: "func3(1)", err: "expects 3 parameters"},
-		{expr: "func3(1,2)", err: "expects 3 parameters"},
-		{expr: "func3(1,2,3,4)", err: "expects 3 parameters"},
-		{expr: "func1(\"foo\")", err: "Invalid type for"},
-		{expr: "func2(\"foo\",\"bar\")", err: "Invalid type for"},
-		{expr: "func3(\"foo\",\"qux\",\"quz\")", err: "Invalid type for"},
+		{expr: "add(a, b)", output: 5},
+		{expr: "ratio(9, 2) > 4", output: true},
+		{expr: `isAdmin(role)`, output: true},
+		{expr: `concat(prefix, suffix) == "mexpr"`, output: true},
+		{expr: "id + 1", output: 124.0},
+		{expr: "name.lower == \"mexpr\"", output: true},
+		{expr: "enabled and a > 1", output: true},
+		{expr: "add(a)", err: "expects 2 parameter"},
+		{expr: "isAdmin(a)", err: "expects string but found number"},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.expr, func(t *testing.T) {
-
-			ast, err := Parse(tc.expr, nil)
-
-			if ast != nil {
-				t.Log("graph G {\n" + ast.Dot("") + "\n}")
-			}
-
-			if tc.err != "" {
-				if err != nil {
-					if strings.Contains(err.Error(), tc.err) {
-						return
-					}
-					t.Fatal(err.Pretty(tc.expr))
-				}
-			} else {
-				if err != nil {
-					t.Fatal(err.Pretty(tc.expr))
-				}
-			}
-
-			result, err := Run(ast, varMap, StrictMode)
+			ast, err := Parse(tc.expr, input)
 			if tc.err != "" {
 				if err == nil {
 					t.Fatal("expected error but found none")
 				}
-				if strings.Contains(err.Error(), tc.err) {
-					return
-				}
-				t.Fatal(err.Pretty(tc.expr))
-			} else {
-				if err != nil {
+				if !strings.Contains(err.Error(), tc.err) {
 					t.Fatal(err.Pretty(tc.expr))
 				}
-				if !reflect.DeepEqual(tc.output, result) {
-					t.Fatalf("expected %v but found %v", tc.output, result)
-				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+
+			result, err := Run(ast, input, StrictMode)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+			if !reflect.DeepEqual(tc.output, result) {
+				t.Fatalf("expected %v but found %v", tc.output, result)
 			}
 		})
 	}

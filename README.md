@@ -151,6 +151,8 @@ Non-boolean values are converted to booleans. The following result in `true`:
 - array with at least one item
 - map with at least one key/value pair
 
+Both `and` and `or` are short-circuited.
+
 ### Functions
 
 - `identifier(...)`
@@ -164,6 +166,13 @@ result, err := mexpr.Eval("myFunc(a, b)", map[string]interface{}{
 	"b": 2,
 })
 ```
+
+Current limitations:
+
+- only regular, non-variadic functions are supported
+- parameter and return types must be `bool`, integer, float, or `string`
+- functions must have exactly one return value
+- zero-argument scalar functions can also be used as lazy values, e.g. `id + 1`
 
 ### String operators
 
