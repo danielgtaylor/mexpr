@@ -13,6 +13,7 @@ func TestInterpreter(t *testing.T) {
 		input       string
 		inputParsed any
 		skipTC      bool
+		unordered   bool
 		opts        []InterpreterOption
 		err         string
 		output      any
@@ -154,7 +155,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: `foo where method == "GET"`, input: `{"foo": {"op1": {"method": "GET", "path": "/op1"}, "op2": {"method": "PUT", "path": "/op2"}, "op3": {"method": "DELETE", "path": "/op3"}}}`, output: []any{map[string]any{"method": "GET", "path": "/op1"}}},
 		{expr: `foo where method == "GET"`, inputParsed: map[any]any{"foo": map[any]any{"op1": map[any]any{"method": "GET", "path": "/op1"}, "op2": map[any]any{"method": "PUT", "path": "/op2"}, "op3": map[any]any{"method": "DELETE", "path": "/op3"}}}, output: []any{map[any]any{"method": "GET", "path": "/op1"}}},
 		{expr: `items where id > 0`, input: `{"items": [{"id": 1}, "x", {"id": 2}]}`, output: []any{map[string]any{"id": 1.0}, map[string]any{"id": 2.0}}},
-		{expr: `foo where id > 0`, input: `{"foo": {"a": "x", "b": {"id": 1}, "c": {"id": 2}}}`, output: []any{map[string]any{"id": 1.0}, map[string]any{"id": 2.0}}},
+		{expr: `foo where id > 0`, input: `{"foo": {"a": "x", "b": {"id": 1}, "c": {"id": 2}}}`, unordered: true, output: []any{map[string]any{"id": 1.0}, map[string]any{"id": 2.0}}},
 		{expr: `items where id > 3`, input: `{"items": []}`, err: "where clause requires a non-empty array or object"},
 		{expr: `items where id > 3`, input: `{"items": 1}`, skipTC: true, output: []any{}},
 		// Order of operations
@@ -234,6 +235,37 @@ func TestInterpreter(t *testing.T) {
 			} else {
 				if err != nil {
 					t.Fatal(err.Pretty(tc.expr))
+				}
+				if tc.unordered {
+					expectedSlice, ok := tc.output.([]any)
+					if !ok {
+						t.Fatalf("unordered test expected []any output, got %T", tc.output)
+					}
+					resultSlice, ok := result.([]any)
+					if !ok {
+						t.Fatalf("unordered test expected []any result, got %T", result)
+					}
+					if len(expectedSlice) != len(resultSlice) {
+						t.Fatalf("expected %v but found %v", tc.output, result)
+					}
+					used := make([]bool, len(resultSlice))
+					for _, expected := range expectedSlice {
+						matched := false
+						for idx, actual := range resultSlice {
+							if used[idx] {
+								continue
+							}
+							if reflect.DeepEqual(expected, actual) {
+								used[idx] = true
+								matched = true
+								break
+							}
+						}
+						if !matched {
+							t.Fatalf("expected %v but found %v", tc.output, result)
+						}
+					}
+					return
 				}
 				if !reflect.DeepEqual(tc.output, result) {
 					t.Fatalf("expected %v but found %v", tc.output, result)
