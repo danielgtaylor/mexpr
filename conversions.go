@@ -107,29 +107,36 @@ func stringLength(v string) int {
 	return utf8.RuneCountInString(v)
 }
 
-func runeIndexToByteOffset(v string, idx int) int {
-	if idx <= 0 {
-		return 0
+func runeRangeToByteOffsets(v string, startIdx, endIdx int) (int, int) {
+	if startIdx <= 0 {
+		startIdx = 0
+	}
+	if endIdx < startIdx {
+		endIdx = startIdx
 	}
 
 	offset := 0
-	for i := 0; i < idx && offset < len(v); i++ {
+	for i := 0; i < startIdx && offset < len(v); i++ {
 		_, size := utf8.DecodeRuneInString(v[offset:])
 		offset += size
 	}
 
-	return offset
+	startOffset := offset
+	for i := startIdx; i < endIdx && offset < len(v); i++ {
+		_, size := utf8.DecodeRuneInString(v[offset:])
+		offset += size
+	}
+
+	return startOffset, offset
 }
 
 func stringIndex(v string, idx int) string {
-	start := runeIndexToByteOffset(v, idx)
-	end := runeIndexToByteOffset(v, idx+1)
+	start, end := runeRangeToByteOffsets(v, idx, idx+1)
 	return v[start:end]
 }
 
 func stringSlice(v string, start, end int) string {
-	from := runeIndexToByteOffset(v, start)
-	to := runeIndexToByteOffset(v, end+1)
+	from, to := runeRangeToByteOffsets(v, start, end+1)
 	return v[from:to]
 }
 
