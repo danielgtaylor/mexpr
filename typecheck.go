@@ -136,6 +136,9 @@ func getSchema(v any) *schema {
 		for _, item := range i {
 			s.items = mergeSchema(s.items, getSchema(item))
 		}
+		if s.items == nil {
+			s.items = newSchema(typeUnknown)
+		}
 		return s
 	case map[string]any:
 		m := newSchema(typeObject)
@@ -157,6 +160,17 @@ func getSchema(v any) *schema {
 			return fn.result
 		}
 		return fn
+	}
+	if isSlice(v) {
+		s := newSchema(typeArray)
+		iterateSlice(v, func(item any) bool {
+			s.items = mergeSchema(s.items, getSchema(item))
+			return true
+		})
+		if s.items == nil {
+			s.items = newSchema(typeUnknown)
+		}
+		return s
 	}
 	return newSchema(typeUnknown)
 }
@@ -373,15 +387,21 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 			objectType := leftType
 			keys := mapKeys(objectType.properties)
 			sort.Strings(keys)
+			leftType = newSchema(typeArray)
 			if len(keys) > 0 {
-				leftType = newSchema(typeArray)
 				for _, key := range keys {
 					leftType.items = mergeSchema(leftType.items, objectType.properties[key])
 				}
 			}
+			if leftType.items == nil {
+				leftType.items = newSchema(typeUnknown)
+			}
 		}
-		if !leftType.isArray() || leftType.items == nil {
-			return nil, NewError(ast.Offset, ast.Length, "where clause requires a non-empty array or object, but found %s", leftType)
+		if leftType.isArray() && leftType.items == nil {
+			leftType.items = newSchema(typeUnknown)
+		}
+		if !leftType.isArray() {
+			return nil, NewError(ast.Offset, ast.Length, "where clause requires an array or object, but found %s", leftType)
 		}
 		// In an unquoted string scenario it makes no sense for the first/only
 		// token after a `where` clause to be treated as a string. Instead we

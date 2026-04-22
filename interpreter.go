@@ -32,9 +32,9 @@ func mapValues[M ~map[K]V, K comparable, V any](m M) []V {
 
 // checkBounds returns an error if the index is out of bounds.
 func checkBounds(ast *Node, input any, idx int) Error {
-	if v, ok := input.([]any); ok {
-		if idx < 0 || idx >= len(v) {
-			return NewError(ast.Offset, ast.Length, "invalid index %d for slice of length %d", int(idx), len(v))
+	if l, ok := sliceLen(input); ok {
+		if idx < 0 || idx >= l {
+			return NewError(ast.Offset, ast.Length, "invalid index %d for slice of length %d", int(idx), l)
 		}
 	}
 	if v, ok := input.(string); ok {
@@ -111,8 +111,8 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			if s, ok := value.(string); ok {
 				return stringLength(s), nil
 			}
-			if a, ok := value.([]any); ok {
-				return len(a), nil
+			if l, ok := sliceLen(value); ok {
+				return l, nil
 			}
 		case "lower":
 			if s, ok := value.(func() string); ok {
@@ -187,23 +187,27 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			if err != nil {
 				return nil, err
 			}
-			if left, ok := resultLeft.([]any); ok {
+			if leftLen, ok := sliceLen(resultLeft); ok {
 				if start < 0 {
-					start += float64(len(left))
+					start += float64(leftLen)
 				}
 				if end < 0 {
-					end += float64(len(left))
+					end += float64(leftLen)
 				}
-				if err := checkBounds(ast, left, int(start)); err != nil {
+				if err := checkBounds(ast, resultLeft, int(start)); err != nil {
 					return nil, err
 				}
-				if err := checkBounds(ast, left, int(end)); err != nil {
+				if err := checkBounds(ast, resultLeft, int(end)); err != nil {
 					return nil, err
 				}
 				if int(start) > int(end) {
 					return nil, NewError(ast.Offset, ast.Length, "slice start cannot be greater than end")
 				}
-				return left[int(start) : int(end)+1], nil
+				result, ok := sliceRange(resultLeft, int(start), int(end))
+				if !ok {
+					return nil, NewError(ast.Offset, ast.Length, "can only index strings or arrays but got %v", resultLeft)
+				}
+				return result, nil
 			}
 			left := toString(resultLeft)
 			leftLen := stringLength(left)
@@ -237,23 +241,27 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			if err != nil {
 				return nil, err
 			}
-			if left, ok := resultLeft.([]any); ok {
+			if leftLen, ok := sliceLen(resultLeft); ok {
 				if start < 0 {
-					start += float64(len(left))
+					start += float64(leftLen)
 				}
 				if end < 0 {
-					end += float64(len(left))
+					end += float64(leftLen)
 				}
-				if err := checkBounds(ast, left, int(start)); err != nil {
+				if err := checkBounds(ast, resultLeft, int(start)); err != nil {
 					return nil, err
 				}
-				if err := checkBounds(ast, left, int(end)); err != nil {
+				if err := checkBounds(ast, resultLeft, int(end)); err != nil {
 					return nil, err
 				}
 				if int(start) > int(end) {
 					return nil, NewError(ast.Offset, ast.Length, "slice start cannot be greater than end")
 				}
-				return left[int(start) : int(end)+1], nil
+				result, ok := sliceRange(resultLeft, int(start), int(end))
+				if !ok {
+					return nil, NewError(ast.Offset, ast.Length, "can only index strings or arrays but got %v", resultLeft)
+				}
+				return result, nil
 			}
 			left := toString(resultLeft)
 			leftLen := stringLength(left)
@@ -279,14 +287,18 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			if err != nil {
 				return nil, err
 			}
-			if left, ok := resultLeft.([]any); ok {
+			if leftLen, ok := sliceLen(resultLeft); ok {
 				if idx < 0 {
-					idx += float64(len(left))
+					idx += float64(leftLen)
 				}
-				if err := checkBounds(ast, left, int(idx)); err != nil {
+				if err := checkBounds(ast, resultLeft, int(idx)); err != nil {
 					return nil, err
 				}
-				return left[int(idx)], nil
+				result, ok := sliceItem(resultLeft, int(idx))
+				if !ok {
+					return nil, NewError(ast.Offset, ast.Length, "can only index strings or arrays but got %v", resultLeft)
+				}
+				return result, nil
 			}
 			left := toString(resultLeft)
 			leftLen := stringLength(left)
@@ -338,8 +350,9 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				return toString(resultLeft) + toString(resultRight), nil
 			}
 			if isSlice(resultLeft) && isSlice(resultRight) {
-				tmp := append([]any{}, resultLeft.([]any)...)
-				return append(tmp, resultRight.([]any)...), nil
+				if out, ok := concatSlices(resultLeft, resultRight); ok {
+					return out, nil
+				}
 			}
 		}
 		if isNumber(resultLeft) && isNumber(resultRight) {
@@ -367,7 +380,7 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				if int(right) == 0 {
 					return nil, NewError(ast.Offset, ast.Length, "cannot divide by zero")
 				}
-				return int(left) % int(right), nil
+				return float64(int(left) % int(right)), nil
 			case NodePower:
 				return math.Pow(left, right), nil
 			}
@@ -467,13 +480,16 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		}
 		switch ast.Type {
 		case NodeIn:
-			if a, ok := resultRight.([]any); ok {
-				for _, item := range a {
+			if isSlice(resultRight) {
+				matched := false
+				iterateSlice(resultRight, func(item any) bool {
 					if deepEqual(item, resultLeft) {
-						return true, nil
+						matched = true
+						return false
 					}
-				}
-				return false, nil
+					return true
+				})
+				return matched, nil
 			}
 			if m, ok := resultRight.(map[string]any); ok {
 				_, ok := m[toString(resultLeft)]
@@ -485,13 +501,16 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			}
 			return strings.Contains(toString(resultRight), toString(resultLeft)), nil
 		case NodeContains:
-			if a, ok := resultLeft.([]any); ok {
-				for _, item := range a {
+			if isSlice(resultLeft) {
+				matched := false
+				iterateSlice(resultLeft, func(item any) bool {
 					if deepEqual(item, resultRight) {
-						return true, nil
+						matched = true
+						return false
 					}
-				}
-				return false, nil
+					return true
+				})
+				return matched, nil
 			}
 			if m, ok := resultLeft.(map[string]any); ok {
 				_, ok := m[toString(resultRight)]
@@ -533,19 +552,24 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			}
 			resultLeft = values
 		}
-		if leftSlice, ok := resultLeft.([]any); ok {
-			for _, item := range leftSlice {
+		if isSlice(resultLeft) {
+			iterateSlice(resultLeft, func(item any) bool {
 				// In an unquoted string scenario it makes no sense for the first/only
 				// token after a `where` clause to be treated as a string. Instead we
 				// treat a `where` the same as a field select `.` in this scenario.
 				i.prevFieldSelect = true
-				resultRight, err := i.run(ast.Right, item)
-				if i.strict && err != nil {
-					return nil, err
+				resultRight, runErr := i.run(ast.Right, item)
+				if i.strict && runErr != nil {
+					err = runErr
+					return false
 				}
 				if toBool(resultRight) {
 					results = append(results, item)
 				}
+				return true
+			})
+			if err != nil {
+				return nil, err
 			}
 		}
 		return results, nil

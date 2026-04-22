@@ -61,6 +61,8 @@ result2, err := interpreter.Run(map[string]any{
 
 Pretty errors use the passed-in input along with the error's offset to display an arrow of where within the expression the error occurs.
 
+Offsets and lengths are rune-based, so caret placement stays correct for Unicode input.
+
 ```go
 inputStr := "2 * foo"
 _, err := mexpr.Eval(inputStr, nil)
@@ -173,6 +175,8 @@ Current limitations:
 - functions must have exactly one return value
 - zero-argument scalar functions can also be used as lazy values, e.g. `id + 1`
 
+Numeric arguments are coerced to the target Go type using standard Go conversions. For example, calling a function that takes an `int` with `1.9` will pass `1` to the function. If you need fractional behavior, make the function accept a float type.
+
 ### String operators
 
 - Indexing, e.g. `foo[0]`
@@ -207,6 +211,8 @@ String dates & times can be compared if they follow RFC 3339 / ISO 8601 with or 
 - `+` (concatenation)
 - `in` (has item), e.g. `1 in foo`
 - `contains` e.g. `foo contains 1`
+
+Common Go slice inputs like `[]any`, `[]int`, `[]float64`, and `[]string` are supported directly without normalizing them into `[]any` first. Other slice and array types fall back to reflection.
 
 Indexes are zero-based. Slice indexes are optional and are _inclusive_. `foo[1:2]` returns `[2, 3]` if the `foo` is `[1, 2, 3, 4]`. Indexes can be negative, e.g. `foo[-1]` selects the last item in the array.
 

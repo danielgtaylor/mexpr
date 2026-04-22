@@ -131,6 +131,7 @@ func NewLexer(expression string) Lexer {
 	return &lexer{
 		expression: expression,
 		pos:        0,
+		runePos:    0,
 		lastWidth:  0,
 		token:      &Token{},
 	}
@@ -139,6 +140,7 @@ func NewLexer(expression string) Lexer {
 type lexer struct {
 	expression string
 	pos        uint16
+	runePos    uint16
 	lastWidth  uint16
 
 	// token is a cached token to prevent new tokens from being allocated.
@@ -154,6 +156,7 @@ func (l *lexer) next() rune {
 	}
 	r, w := utf8.DecodeRuneInString(l.expression[l.pos:])
 	l.pos += uint16(w)
+	l.runePos++
 	l.lastWidth = uint16(w)
 	return r
 }
@@ -161,6 +164,9 @@ func (l *lexer) next() rune {
 // back moves back one rune.
 func (l *lexer) back() {
 	l.pos -= l.lastWidth
+	if l.lastWidth > 0 {
+		l.runePos--
+	}
 }
 
 // peek returns the next rune without moving the position forward.
@@ -173,8 +179,8 @@ func (l *lexer) peek() rune {
 func (l *lexer) newToken(typ TokenType, value string) *Token {
 	l.token.Type = typ
 	l.token.Value = value
-	l.token.Offset = l.pos - uint16(len(value))
-	l.token.Length = uint8(len(value))
+	l.token.Offset = l.runePos - uint16(utf8.RuneCountInString(value))
+	l.token.Length = uint8(utf8.RuneCountInString(value))
 	if l.token.Length == 0 {
 		l.token.Length = 1
 	}
@@ -236,7 +242,7 @@ func (l *lexer) consumeIdentifier() *Token {
 // quote is encountered. Only double-quoted strings are supported.
 func (l *lexer) consumeString() (*Token, Error) {
 	buf := bytes.NewBuffer(make([]byte, 0, 8))
-	offset := l.pos - l.lastWidth
+	offset := l.runePos - 1
 	for {
 		r := l.next()
 		if r == '\\' && l.peek() == '"' {
@@ -254,7 +260,7 @@ func (l *lexer) consumeString() (*Token, Error) {
 	}
 	tok := l.newToken(TokenString, buf.String())
 	tok.Offset = offset
-	tok.Length = uint8(l.pos - offset)
+	tok.Length = uint8(l.runePos - offset)
 	return tok, nil
 }
 
@@ -299,7 +305,7 @@ func (l *lexer) Next() (*Token, Error) {
 			l.next()
 			return l.newToken(TokenComparison, "=="), nil
 		}
-		return nil, NewError(l.pos, 1, "= should be ==")
+		return nil, NewError(l.runePos-1, 1, "= should be ==")
 	}
 
 	if r == '"' {
