@@ -11,6 +11,7 @@ Features:
 - Fast, low-allocation parser and runtime
   - Many simple expressions are zero-allocation
 - Type checking during parsing
+- Typed scalar functions and lazy `func()` values
 - Simple
   - Easy to learn
   - Easy to read
@@ -137,6 +138,8 @@ Math operations between constants are precomputed when possible, so it is effici
 - `and`
 - `or`
 
+Both `and` and `or` are short-circuited.
+
 ```py
 1 < 2 and 3 < 4
 ```
@@ -147,6 +150,27 @@ Non-boolean values are converted to booleans. The following result in `true`:
 - non-empty string
 - array with at least one item
 - map with at least one key/value pair
+
+### Functions
+
+- `identifier(...)`
+
+Functions can be called by providing them in the variables map.
+
+```go
+result, err := mexpr.Eval("myFunc(a, b)", map[string]interface{}{
+	"myFunc": func(a, b int) int { return a + b },
+	"a": 1,
+	"b": 2,
+})
+```
+
+Current limitations:
+
+- only regular, non-variadic functions are supported
+- parameter and return types must be `bool`, integer, float, or `string`
+- functions must have exactly one return value
+- zero-argument scalar functions can also be used as lazy values, e.g. `id + 1`
 
 ### String operators
 
@@ -220,6 +244,21 @@ not (items where id > 3)
 - Accessing values, e.g. `foo.bar.baz`
 - `in` (has key), e.g. `"key" in foo`
 - `contains` e.g. `foo contains "key"`
+
+### Conversions
+
+Any value concatenated with a string will result in a string. For example `"id" + 1` will result in `"id1"`.
+
+The value of a variable can be mapped to a function. This allows the implementor to use functions to retrieve actual values of variables rather than pre-computing values:
+
+```go
+result, _ := mexpr.Eval(`id + 1`, map[string]interface{}{
+    "id": func() int { return 123 },
+})
+// result is 124
+```
+
+In combination with `and`/`or` short-circuiting, this allows lazy evaluation.
 
 #### Map wildcard filtering
 
