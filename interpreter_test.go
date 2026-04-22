@@ -243,6 +243,244 @@ func TestInterpreter(t *testing.T) {
 	}
 }
 
+func TestTypedFunctions(t *testing.T) {
+	input := map[string]any{
+		"add":      func(a, b int) int { return a + b },
+		"ratio":    func(a int, b float64) float64 { return float64(a) / b },
+		"isAdmin":  func(role string) bool { return role == "admin" },
+		"concat":   func(left, right string) string { return left + right },
+		"toggle":   func(v bool) bool { return !v },
+		"uintAdd":  func(a uint, b uint8) uint64 { return uint64(a + uint(b)) },
+		"id":       func() int { return 123 },
+		"name":     func() string { return "MEXPR" },
+		"enabled":  func() bool { return true },
+		"a":        2,
+		"b":        3,
+		"enabled2": false,
+		"role":     "admin",
+		"prefix":   "m",
+		"suffix":   "expr",
+	}
+
+	type test struct {
+		expr   string
+		output any
+		err    string
+	}
+
+	cases := []test{
+		{expr: "add(a, b)", output: 5},
+		{expr: "ratio(9, 2) > 4", output: true},
+		{expr: `isAdmin(role)`, output: true},
+		{expr: `concat(prefix, suffix) == "mexpr"`, output: true},
+		{expr: "toggle(enabled2)", output: true},
+		{expr: "uintAdd(a, b) == 5", output: true},
+		{expr: "id + 1", output: 124.0},
+		{expr: "name.lower == \"mexpr\"", output: true},
+		{expr: "name.length == 5", output: true},
+		{expr: "enabled and a > 1", output: true},
+		{expr: "add(a)", err: "expects 2 parameter"},
+		{expr: "isAdmin(a)", err: "expects string but found number"},
+		{expr: "toggle(a)", err: "expects boolean but found number"},
+		{expr: "missing()", err: "function missing not found"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.expr, func(t *testing.T) {
+			ast, err := Parse(tc.expr, input)
+			if tc.err != "" {
+				if err == nil {
+					t.Fatal("expected error but found none")
+				}
+				if !strings.Contains(err.Error(), tc.err) {
+					t.Fatal(err.Pretty(tc.expr))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+
+			result, err := Run(ast, input, StrictMode)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+			if !reflect.DeepEqual(tc.output, result) {
+				t.Fatalf("expected %v but found %v", tc.output, result)
+			}
+		})
+	}
+}
+
+func TestTypedFunctionsMapAny(t *testing.T) {
+	input := map[any]any{
+		"upper": func(s string) string { return strings.ToUpper(s) },
+		"value": "mexpr",
+	}
+
+	ast, err := Parse("upper(value)", input)
+	if err != nil {
+		t.Fatal(err.Pretty("upper(value)"))
+	}
+
+	result, err := Run(ast, input, StrictMode)
+	if err != nil {
+		t.Fatal(err.Pretty("upper(value)"))
+	}
+	if result != "MEXPR" {
+		t.Fatalf("expected MEXPR but found %v", result)
+	}
+}
+
+func TestTypedFunctionsUnsupportedSignatures(t *testing.T) {
+	type test struct {
+		name  string
+		expr  string
+		input map[string]any
+		err   string
+	}
+
+	cases := []test{
+		{
+			name: "variadic",
+			expr: "join(a)",
+			input: map[string]any{
+				"join": func(values ...string) string { return strings.Join(values, ",") },
+				"a":    "x",
+			},
+			err: "unsupported function type for join",
+		},
+		{
+			name: "multiple returns",
+			expr: "pair(a)",
+			input: map[string]any{
+				"pair": func(v string) (string, string) { return v, v },
+				"a":    "x",
+			},
+			err: "unsupported function type for pair",
+		},
+		{
+			name: "non scalar param",
+			expr: "sum(items)",
+			input: map[string]any{
+				"sum":   func(values []int) int { return len(values) },
+				"items": []any{1, 2},
+			},
+			err: "unsupported function type for sum",
+		},
+		{
+			name: "non scalar return",
+			expr: "items()",
+			input: map[string]any{
+				"items": func() []string { return []string{"a"} },
+			},
+			err: "unsupported function type for items",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Parse(tc.expr, tc.input)
+			if err == nil {
+				t.Fatal("expected error but found none")
+			}
+			if !strings.Contains(err.Error(), tc.err) {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+		})
+	}
+}
+
+func TestTypeCheckFunctions(t *testing.T) {
+	type test struct {
+		name  string
+		expr  string
+		input any
+		err   string
+	}
+
+	cases := []test{
+		{
+			name: "typed function call",
+			expr: "add(a, b)",
+			input: map[string]any{
+				"add": func(a, b int) int { return a + b },
+				"a":   2,
+				"b":   3,
+			},
+		},
+		{
+			name: "lazy numeric value",
+			expr: "id + 1",
+			input: map[string]any{
+				"id": func() int { return 123 },
+			},
+		},
+		{
+			name: "lazy string pseudo property",
+			expr: "name.upper == \"MEXPR\"",
+			input: map[string]any{
+				"name": func() string { return "mexpr" },
+			},
+		},
+		{
+			name: "arity mismatch",
+			expr: "add(a)",
+			input: map[string]any{
+				"add": func(a, b int) int { return a + b },
+				"a":   2,
+			},
+			err: "expects 2 parameter(s), got 1",
+		},
+		{
+			name: "argument type mismatch",
+			expr: "toggle(a)",
+			input: map[string]any{
+				"toggle": func(v bool) bool { return !v },
+				"a":      2,
+			},
+			err: "expects boolean but found number",
+		},
+		{
+			name:  "missing function",
+			expr:  "missing()",
+			input: map[string]any{},
+			err:   "function missing not found",
+		},
+		{
+			name: "unsupported signature",
+			expr: "items()",
+			input: map[string]any{
+				"items": func() []string { return []string{"a"} },
+			},
+			err: "unsupported function type for items",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := Parse(tc.expr, nil)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+
+			err = TypeCheck(ast, tc.input)
+			if tc.err != "" {
+				if err == nil {
+					t.Fatal("expected error but found none")
+				}
+				if !strings.Contains(err.Error(), tc.err) {
+					t.Fatal(err.Pretty(tc.expr))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+		})
+	}
+}
+
 func FuzzMexpr(f *testing.F) {
 	f.Fuzz(func(t *testing.T, s string) {
 		Eval(s, nil)

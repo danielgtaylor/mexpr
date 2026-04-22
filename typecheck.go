@@ -9,12 +9,13 @@ import (
 type valueType string
 
 const (
-	typeUnknown valueType = "unknown"
-	typeBool    valueType = "boolean"
-	typeNumber  valueType = "number"
-	typeString  valueType = "string"
-	typeArray   valueType = "array"
-	typeObject  valueType = "object"
+	typeUnknown  valueType = "unknown"
+	typeBool     valueType = "boolean"
+	typeNumber   valueType = "number"
+	typeString   valueType = "string"
+	typeArray    valueType = "array"
+	typeObject   valueType = "object"
+	typeFunction valueType = "function"
 )
 
 // mapKeys returns the keys of the map m.
@@ -31,11 +32,20 @@ type schema struct {
 	typeName   valueType
 	items      *schema
 	properties map[string]*schema
+	parameters []*schema
+	result     *schema
 }
 
 func (s *schema) String() string {
 	if s.isArray() {
 		return fmt.Sprintf("%s[%s]", s.typeName, s.items)
+	}
+	if s.isFunction() {
+		params := make([]string, 0, len(s.parameters))
+		for _, param := range s.parameters {
+			params = append(params, param.String())
+		}
+		return fmt.Sprintf("%s(%s)->%s", s.typeName, strings.Join(params, ", "), s.result)
 	}
 	if s.isObject() {
 		return fmt.Sprintf("%s{%v}", s.typeName, mapKeys(s.properties))
@@ -57,6 +67,10 @@ func (s *schema) isArray() bool {
 
 func (s *schema) isObject() bool {
 	return s != nil && s.typeName == typeObject
+}
+
+func (s *schema) isFunction() bool {
+	return s != nil && s.typeName == typeFunction
 }
 
 var (
@@ -137,6 +151,12 @@ func getSchema(v any) *schema {
 			m.properties[toString(k)] = getSchema(v)
 		}
 		return m
+	}
+	if fn, ok := getFunctionSchema(v); ok {
+		if len(fn.parameters) == 0 {
+			return fn.result
+		}
+		return fn
 	}
 	return newSchema(typeUnknown)
 }
@@ -378,6 +398,52 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 			return nil, err
 		}
 		return schemaBool, nil
+	case NodeFunctionCall:
+		funcName := ast.Left.Value.(string)
+		var fn any
+		switch m := value.(type) {
+		case map[string]any:
+			fn = m[funcName]
+		case map[any]any:
+			fn = m[funcName]
+		default:
+			return nil, NewError(ast.Offset, ast.Length, "function %s not found", funcName)
+		}
+		if fn == nil {
+			return nil, NewError(ast.Offset, ast.Length, "function %s not found", funcName)
+		}
+
+		fnSchema, ok := getFunctionSchema(fn)
+		if !ok {
+			return nil, NewError(ast.Offset, ast.Length, "unsupported function type for %s", funcName)
+		}
+
+		params := ast.Value.([]Node)
+		if len(params) != len(fnSchema.parameters) {
+			return nil, NewError(ast.Offset, ast.Length, "function %s expects %d parameter(s), got %d", funcName, len(fnSchema.parameters), len(params))
+		}
+
+		for idx, param := range params {
+			paramType, err := i.run(&param, value)
+			if err != nil {
+				return nil, err
+			}
+			if !compatibleSchemas(fnSchema.parameters[idx], paramType) {
+				return nil, NewError(ast.Offset, ast.Length, "function %s parameter %d expects %s but found %s", funcName, idx+1, fnSchema.parameters[idx], paramType)
+			}
+		}
+
+		return fnSchema.result, nil
 	}
 	return nil, NewError(ast.Offset, ast.Length, "unexpected node %v", ast)
+}
+
+func compatibleSchemas(expected, actual *schema) bool {
+	if expected == nil || actual == nil {
+		return false
+	}
+	if expected.typeName == actual.typeName {
+		return true
+	}
+	return expected.isNumber() && actual.isNumber()
 }

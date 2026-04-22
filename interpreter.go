@@ -2,6 +2,7 @@ package mexpr
 
 import (
 	"math"
+	"reflect"
 	"strings"
 )
 
@@ -91,11 +92,17 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 
 	switch ast.Type {
 	case NodeIdentifier:
+		if resolved, ok := resolveLazyValue(value); ok {
+			value = resolved
+		}
 		switch ast.Value.(string) {
 		case "@":
 			return value, nil
 		case "length":
 			// Special pseudo-property to get the value's length.
+			if s, ok := value.(func() string); ok {
+				return stringLength(s()), nil
+			}
 			if s, ok := value.(string); ok {
 				return stringLength(s), nil
 			}
@@ -103,21 +110,33 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				return len(a), nil
 			}
 		case "lower":
+			if s, ok := value.(func() string); ok {
+				return strings.ToLower(s()), nil
+			}
 			if s, ok := value.(string); ok {
 				return strings.ToLower(s), nil
 			}
 		case "upper":
+			if s, ok := value.(func() string); ok {
+				return strings.ToUpper(s()), nil
+			}
 			if s, ok := value.(string); ok {
 				return strings.ToUpper(s), nil
 			}
 		}
 		if m, ok := value.(map[string]any); ok {
 			if v, ok := m[ast.Value.(string)]; ok {
+				if resolved, ok := resolveLazyValue(v); ok {
+					return resolved, nil
+				}
 				return v, nil
 			}
 		}
 		if m, ok := value.(map[any]any); ok {
 			if v, ok := m[ast.Value]; ok {
+				if resolved, ok := resolveLazyValue(v); ok {
+					return resolved, nil
+				}
 				return v, nil
 			}
 		}
@@ -470,6 +489,92 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			}
 		}
 		return results, nil
+	case NodeFunctionCall:
+		funcName := ast.Left.Value.(string)
+		var fn any
+		switch m := value.(type) {
+		case map[string]any:
+			fn = m[funcName]
+		case map[any]any:
+			fn = m[funcName]
+		}
+		if fn == nil {
+			if i.strict {
+				return nil, NewError(ast.Offset, ast.Length, "function %s not found", funcName)
+			}
+			return nil, nil
+		}
+
+		fnType := reflect.TypeOf(fn)
+		if fnType == nil || fnType.Kind() != reflect.Func {
+			return nil, NewError(ast.Offset, ast.Length, "%s is not a function", funcName)
+		}
+		if fnType.IsVariadic() || fnType.NumOut() != 1 {
+			return nil, NewError(ast.Offset, ast.Length, "unsupported function type for %s", funcName)
+		}
+
+		params := ast.Value.([]Node)
+		if len(params) != fnType.NumIn() {
+			return nil, NewError(ast.Offset, ast.Length, "function %s expects %d parameter(s), got %d", funcName, fnType.NumIn(), len(params))
+		}
+
+		inputs := make([]reflect.Value, 0, len(params))
+		for idx, param := range params {
+			paramValue, err := i.run(&param, value)
+			if err != nil {
+				return nil, err
+			}
+			input, err := convertFunctionArg(ast, funcName, idx, paramValue, fnType.In(idx))
+			if err != nil {
+				return nil, err
+			}
+			inputs = append(inputs, input)
+		}
+
+		result := reflect.ValueOf(fn).Call(inputs)[0]
+		return result.Interface(), nil
 	}
 	return nil, nil
+}
+
+func convertFunctionArg(ast *Node, funcName string, idx int, value any, target reflect.Type) (reflect.Value, Error) {
+	switch target.Kind() {
+	case reflect.Bool:
+		b, ok := value.(bool)
+		if !ok {
+			return reflect.Value{}, NewError(ast.Offset, ast.Length, "function %s parameter %d expects bool", funcName, idx+1)
+		}
+		return reflect.ValueOf(b).Convert(target), nil
+	case reflect.String:
+		if !isString(value) {
+			return reflect.Value{}, NewError(ast.Offset, ast.Length, "function %s parameter %d expects string", funcName, idx+1)
+		}
+		return reflect.ValueOf(toString(value)).Convert(target), nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		n, err := toNumber(ast, value)
+		if err != nil {
+			return reflect.Value{}, NewError(ast.Offset, ast.Length, "function %s parameter %d expects number", funcName, idx+1)
+		}
+		out := reflect.New(target).Elem()
+		out.SetInt(int64(n))
+		return out, nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		n, err := toNumber(ast, value)
+		if err != nil || n < 0 {
+			return reflect.Value{}, NewError(ast.Offset, ast.Length, "function %s parameter %d expects number", funcName, idx+1)
+		}
+		out := reflect.New(target).Elem()
+		out.SetUint(uint64(n))
+		return out, nil
+	case reflect.Float32, reflect.Float64:
+		n, err := toNumber(ast, value)
+		if err != nil {
+			return reflect.Value{}, NewError(ast.Offset, ast.Length, "function %s parameter %d expects number", funcName, idx+1)
+		}
+		out := reflect.New(target).Elem()
+		out.SetFloat(n)
+		return out, nil
+	}
+
+	return reflect.Value{}, NewError(ast.Offset, ast.Length, "unsupported function type for %s", funcName)
 }

@@ -13,6 +13,12 @@ func isNumber(v any) bool {
 		return true
 	case float32, float64:
 		return true
+	case func() int, func() int8, func() int16, func() int32, func() int64:
+		return true
+	case func() uint, func() uint8, func() uint16, func() uint32, func() uint64:
+		return true
+	case func() float32, func() float64:
+		return true
 	}
 	return false
 }
@@ -43,6 +49,30 @@ func toNumber(ast *Node, v any) (float64, Error) {
 		return float64(n), nil
 	case float32:
 		return float64(n), nil
+	case func() int:
+		return float64(n()), nil
+	case func() int8:
+		return float64(n()), nil
+	case func() int16:
+		return float64(n()), nil
+	case func() int32:
+		return float64(n()), nil
+	case func() int64:
+		return float64(n()), nil
+	case func() uint:
+		return float64(n()), nil
+	case func() uint8:
+		return float64(n()), nil
+	case func() uint16:
+		return float64(n()), nil
+	case func() uint32:
+		return float64(n()), nil
+	case func() uint64:
+		return float64(n()), nil
+	case func() float32:
+		return float64(n()), nil
+	case func() float64:
+		return n(), nil
 	}
 	return 0, NewError(ast.Offset, ast.Length, "unable to convert to number: %v", v)
 }
@@ -50,6 +80,8 @@ func toNumber(ast *Node, v any) (float64, Error) {
 func isString(v any) bool {
 	switch v.(type) {
 	case string, rune, byte, []byte:
+		return true
+	case func() string:
 		return true
 	}
 	return false
@@ -65,6 +97,8 @@ func toString(v any) string {
 		return string(s)
 	case []byte:
 		return string(s)
+	case func() string:
+		return s()
 	}
 	return fmt.Sprintf("%v", v)
 }
@@ -175,6 +209,34 @@ func normalize(v any) any {
 		return float64(n)
 	case []byte:
 		return string(n)
+	case func() int:
+		return float64(n())
+	case func() int8:
+		return float64(n())
+	case func() int16:
+		return float64(n())
+	case func() int32:
+		return float64(n())
+	case func() int64:
+		return float64(n())
+	case func() uint:
+		return float64(n())
+	case func() uint8:
+		return float64(n())
+	case func() uint16:
+		return float64(n())
+	case func() uint32:
+		return float64(n())
+	case func() uint64:
+		return float64(n())
+	case func() float32:
+		return float64(n())
+	case func() float64:
+		return n()
+	case func() string:
+		return n()
+	case func() bool:
+		return n()
 	}
 
 	return v

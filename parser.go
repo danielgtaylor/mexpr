@@ -39,6 +39,7 @@ const (
 	NodeBefore
 	NodeAfter
 	NodeWhere
+	NodeFunctionCall
 )
 
 // Node is a unit of the binary tree that makes up the abstract syntax tree.
@@ -107,6 +108,8 @@ func (n Node) String() string {
 		return "after"
 	case NodeWhere:
 		return "where"
+	case NodeFunctionCall:
+		return "()"
 	}
 
 	return ""
@@ -144,6 +147,7 @@ var bindingPowers = map[TokenType]int{
 	TokenPower:         50,
 	TokenLeftBracket:   60,
 	TokenLeftParen:     70,
+	TokenComma:         1,
 }
 
 // precomputeLiterals takes two `NodeLiteral` nodes and a math operation and
@@ -440,6 +444,58 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 		}
 		nn.Value = []any{0.0, 0.0}
 		return nn, nil
+	case TokenLeftParen:
+		if n.Type != NodeIdentifier {
+			return nil, NewError(t.Offset, t.Length, "unexpected left parenthesis")
+		}
+
+		params := []Node{}
+		offset := t.Offset
+		if p.token.Type == TokenRightParen {
+			if err := p.advance(); err != nil {
+				return nil, err
+			}
+			return &Node{
+				Type:   NodeFunctionCall,
+				Left:   n,
+				Value:  params,
+				Offset: offset,
+				Length: uint8(p.token.Offset + uint16(p.token.Length) - offset),
+			}, nil
+		}
+
+		for {
+			param, err := p.parse(bindingPowers[TokenComma])
+			if err != nil {
+				return nil, err
+			}
+			if param == nil {
+				return nil, NewError(p.token.Offset, p.token.Length, "expected parameter")
+			}
+			params = append(params, *param)
+
+			if p.token.Type == TokenRightParen {
+				if err := p.advance(); err != nil {
+					return nil, err
+				}
+				break
+			}
+
+			if p.token.Type != TokenComma {
+				return nil, NewError(p.token.Offset, p.token.Length, "expected comma or right parenthesis")
+			}
+			if err := p.advance(); err != nil {
+				return nil, err
+			}
+		}
+
+		return &Node{
+			Type:   NodeFunctionCall,
+			Left:   n,
+			Value:  params,
+			Offset: offset,
+			Length: uint8(p.token.Offset + uint16(p.token.Length) - offset),
+		}, nil
 	}
 	return nil, NewError(t.Offset, t.Length, "unexpected token %s", t.Type)
 }
