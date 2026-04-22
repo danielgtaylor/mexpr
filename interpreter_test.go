@@ -380,6 +380,96 @@ func TestTypedFunctionsUnsupportedSignatures(t *testing.T) {
 	}
 }
 
+func TestTypeCheckFunctions(t *testing.T) {
+	type test struct {
+		name  string
+		expr  string
+		input any
+		err   string
+	}
+
+	cases := []test{
+		{
+			name: "typed function call",
+			expr: "add(a, b)",
+			input: map[string]any{
+				"add": func(a, b int) int { return a + b },
+				"a":   2,
+				"b":   3,
+			},
+		},
+		{
+			name: "lazy numeric value",
+			expr: "id + 1",
+			input: map[string]any{
+				"id": func() int { return 123 },
+			},
+		},
+		{
+			name: "lazy string pseudo property",
+			expr: "name.upper == \"MEXPR\"",
+			input: map[string]any{
+				"name": func() string { return "mexpr" },
+			},
+		},
+		{
+			name: "arity mismatch",
+			expr: "add(a)",
+			input: map[string]any{
+				"add": func(a, b int) int { return a + b },
+				"a":   2,
+			},
+			err: "expects 2 parameter(s), got 1",
+		},
+		{
+			name: "argument type mismatch",
+			expr: "toggle(a)",
+			input: map[string]any{
+				"toggle": func(v bool) bool { return !v },
+				"a":      2,
+			},
+			err: "expects boolean but found number",
+		},
+		{
+			name:  "missing function",
+			expr:  "missing()",
+			input: map[string]any{},
+			err:   "function missing not found",
+		},
+		{
+			name: "unsupported signature",
+			expr: "items()",
+			input: map[string]any{
+				"items": func() []string { return []string{"a"} },
+			},
+			err: "unsupported function type for items",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := Parse(tc.expr, nil)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+
+			err = TypeCheck(ast, tc.input)
+			if tc.err != "" {
+				if err == nil {
+					t.Fatal("expected error but found none")
+				}
+				if !strings.Contains(err.Error(), tc.err) {
+					t.Fatal(err.Pretty(tc.expr))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+		})
+	}
+}
+
 func FuzzMexpr(f *testing.F) {
 	f.Fuzz(func(t *testing.T, s string) {
 		Eval(s, nil)

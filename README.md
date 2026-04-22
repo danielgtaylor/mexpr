@@ -11,7 +11,7 @@ Features:
 - Fast, low-allocation parser and runtime
   - Many simple expressions are zero-allocation
 - Type checking during parsing
-- Type conversion for `func()`
+- Typed scalar functions and lazy `func()` values
 - Simple
   - Easy to learn
   - Easy to read
@@ -151,8 +151,6 @@ Non-boolean values are converted to booleans. The following result in `true`:
 - array with at least one item
 - map with at least one key/value pair
 
-Both `and` and `or` are short-circuited.
-
 ### Functions
 
 - `identifier(...)`
@@ -260,7 +258,7 @@ result, _ := mexpr.Eval(`id + 1`, map[string]interface{}{
 // result is 124
 ```
 
-In combination with short-circuiting with and/or it allows lazy evaluation.
+In combination with `and`/`or` short-circuiting, this allows lazy evaluation.
 
 #### Map wildcard filtering
 
