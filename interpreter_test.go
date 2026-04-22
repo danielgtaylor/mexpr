@@ -15,7 +15,7 @@ func TestInterpreter(t *testing.T) {
 		skipTC      bool
 		opts        []InterpreterOption
 		err         string
-		output      interface{}
+		output      any
 	}
 	cases := []test{
 		// Add/sub
@@ -96,20 +96,20 @@ func TestInterpreter(t *testing.T) {
 		{expr: "foo.bar.baz", input: `{"foo": {"bar": {"baz": 1.0}}}`, output: 1.0},
 		{expr: `foo == "foo"`, input: `{"foo": "foo"}`, output: true},
 		{expr: `foo.in.not`, input: `{"foo": {"in": {"not": 1}}}`, output: 1.0},
-		{expr: `@`, input: `{"hello": "world"}`, output: map[string]interface{}{"hello": "world"}},
+		{expr: `@`, input: `{"hello": "world"}`, output: map[string]any{"hello": "world"}},
 		{expr: `hello.@`, input: `{"hello": "world"}`, output: "world"},
 		// Arrays
 		{expr: "foo[0]", input: `{"foo": [1, 2]}`, output: 1.0},
 		{expr: "foo[-1]", input: `{"foo": [1, 2]}`, output: 2.0},
-		{expr: "foo[:1]", input: `{"foo": [1, 2, 3]}`, output: []interface{}{1.0, 2.0}},
-		{expr: "foo[:]", input: `{"foo": [1, 2, 3]}`, output: []interface{}{1.0, 2.0, 3.0}},
-		{expr: "foo[2:]", input: `{"foo": [1, 2, 3]}`, output: []interface{}{3.0}},
-		{expr: "foo[:-1]", input: `{"foo": [1, 2, 3]}`, output: []interface{}{1.0, 2.0, 3.0}},
+		{expr: "foo[:1]", input: `{"foo": [1, 2, 3]}`, output: []any{1.0, 2.0}},
+		{expr: "foo[:]", input: `{"foo": [1, 2, 3]}`, output: []any{1.0, 2.0, 3.0}},
+		{expr: "foo[2:]", input: `{"foo": [1, 2, 3]}`, output: []any{3.0}},
+		{expr: "foo[:-1]", input: `{"foo": [1, 2, 3]}`, output: []any{1.0, 2.0, 3.0}},
 		{expr: "foo[1 + 2 / 2]", input: `{"foo": [1, 2, 3]}`, output: 3.0},
-		{expr: "foo[1:1 + 2]", input: `{"foo": [1, 2, 3, 4]}`, output: []interface{}{2.0, 3.0, 4.0}},
-		{expr: "foo[foo[0]:bar.baz * 1^2]", input: `{"foo": [1, 2, 3, 4], "bar": {"baz": 3}}`, output: []interface{}{2.0, 3.0, 4.0}},
-		{expr: "foo + bar", input: `{"foo": [1, 2], "bar": [3, 4]}`, output: []interface{}{1.0, 2.0, 3.0, 4.0}},
-		{expr: "foo[bar]", input: `{"foo": [1, 2, 3], "bar": [0, 1]}`, output: []interface{}{1.0, 2.0}},
+		{expr: "foo[1:1 + 2]", input: `{"foo": [1, 2, 3, 4]}`, output: []any{2.0, 3.0, 4.0}},
+		{expr: "foo[foo[0]:bar.baz * 1^2]", input: `{"foo": [1, 2, 3, 4], "bar": {"baz": 3}}`, output: []any{2.0, 3.0, 4.0}},
+		{expr: "foo + bar", input: `{"foo": [1, 2], "bar": [3, 4]}`, output: []any{1.0, 2.0, 3.0, 4.0}},
+		{expr: "foo[bar]", input: `{"foo": [1, 2, 3], "bar": [0, 1]}`, output: []any{1.0, 2.0}},
 		// In
 		{expr: `"foo" in "foobar"`, output: true},
 		{expr: `"foo" in bar`, input: `{"bar": ["foo", "other"]}`, output: true},
@@ -146,8 +146,8 @@ func TestInterpreter(t *testing.T) {
 		{expr: `str.lower`, input: `{"str": "ABCD"}`, output: "abcd"},
 		{expr: `str.lower == abcd`, input: `{"str": "ABCD"}`, opts: []InterpreterOption{UnquotedStrings}, skipTC: true, output: true},
 		// Where
-		{expr: `items where id > 3`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: []interface{}{map[string]interface{}{"id": 5.0}, map[string]interface{}{"id": 7.0}}},
-		{expr: `items where id > 3 where labels contains "foo"`, input: `{"items": [{"id": 1, "labels": ["foo"]}, {"id": 3}, {"id": 5, "labels": ["foo"]}, {"id": 7}]}`, output: []interface{}{map[string]interface{}{"id": 5.0, "labels": []interface{}{"foo"}}}},
+		{expr: `items where id > 3`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: []any{map[string]any{"id": 5.0}, map[string]any{"id": 7.0}}},
+		{expr: `items where id > 3 where labels contains "foo"`, input: `{"items": [{"id": 1, "labels": ["foo"]}, {"id": 3}, {"id": 5, "labels": ["foo"]}, {"id": 7}]}`, output: []any{map[string]any{"id": 5.0, "labels": []any{"foo"}}}},
 		{expr: `(items where id > 3).length == 2`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: true},
 		{expr: `not (items where id > 3)`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: false},
 		{expr: `items where id > 3`, input: `{}`, skipTC: true, output: nil},
@@ -264,7 +264,7 @@ func Benchmark(b *testing.B) {
 		name   string
 		mexpr  string
 		expr   string
-		result interface{}
+		result any
 	}{
 		{"field", `baz`, `baz`, "value"},
 		{"comparison", `foo.bar > 1000`, `foo.bar > 1000`, true},
@@ -280,13 +280,13 @@ func Benchmark(b *testing.B) {
 		},
 	}
 
-	var r interface{}
-	input := map[string]interface{}{
-		"foo": map[string]interface{}{
+	var r any
+	input := map[string]any{
+		"foo": map[string]any{
 			"bar": 1000000000.0,
 		},
 		"baz": "value",
-		"arr": []interface{}{1, 2, 3},
+		"arr": []any{1, 2, 3},
 	}
 
 	for _, bm := range benchmarks {

@@ -32,7 +32,7 @@ Try it out on the [Go Playground](https://play.golang.org/p/Z0UcEBgfxu_r)! You c
 import "github.com/danielgtaylor/mexpr"
 
 // Convenience for lexing/parsing/running in one step:
-result, err := mexpr.Eval("a > b", map[string]interface{}{
+result, err := mexpr.Eval("a > b", map[string]any{
 	"a": 2,
 	"b": 1,
 })
@@ -42,17 +42,17 @@ result, err := mexpr.Eval("a > b", map[string]interface{}{
 l := mexpr.NewLexer("a > b")
 p := mexpr.NewParser(l)
 ast, err := p.Parse()
-typeExamples := map[string]interface{}{
+typeExamples := map[string]any{
 	"a": 2,
 	"b": 1,
 }
 err := mexpr.TypeCheck(ast, typeExamples)
 interpreter := mexpr.NewInterpreter(ast)
-result1, err := interpreter.Run(map[string]interface{}{
+result1, err := interpreter.Run(map[string]any{
 	"a": 1,
 	"b": 2,
 })
-result2, err := interpreter.Run(map[string]interface{}{
+result2, err := interpreter.Run(map[string]any{
 	"a": 150,
 	"b": 30,
 })

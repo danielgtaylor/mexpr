@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 )
 
-func isNumber(v interface{}) bool {
+func isNumber(v any) bool {
 	switch v.(type) {
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return true
@@ -17,7 +17,7 @@ func isNumber(v interface{}) bool {
 	return false
 }
 
-func toNumber(ast *Node, v interface{}) (float64, Error) {
+func toNumber(ast *Node, v any) (float64, Error) {
 	switch n := v.(type) {
 	case float64:
 		return n, nil
@@ -47,7 +47,7 @@ func toNumber(ast *Node, v interface{}) (float64, Error) {
 	return 0, NewError(ast.Offset, ast.Length, "unable to convert to number: %v", v)
 }
 
-func isString(v interface{}) bool {
+func isString(v any) bool {
 	switch v.(type) {
 	case string, rune, byte, []byte:
 		return true
@@ -55,7 +55,7 @@ func isString(v interface{}) bool {
 	return false
 }
 
-func toString(v interface{}) string {
+func toString(v any) string {
 	switch s := v.(type) {
 	case string:
 		return s
@@ -83,7 +83,7 @@ func stringSlice(v string, start, end int) string {
 
 // toTime converts a string value into a time.Time if possible, otherwise
 // returns a zero time.
-func toTime(v interface{}) time.Time {
+func toTime(v any) time.Time {
 	vStr := toString(v)
 	if t, err := time.Parse(time.RFC3339, vStr); err == nil {
 		return t
@@ -97,14 +97,14 @@ func toTime(v interface{}) time.Time {
 	return time.Time{}
 }
 
-func isSlice(v interface{}) bool {
-	if _, ok := v.([]interface{}); ok {
+func isSlice(v any) bool {
+	if _, ok := v.([]any); ok {
 		return true
 	}
 	return false
 }
 
-func toBool(v interface{}) bool {
+func toBool(v any) bool {
 	switch n := v.(type) {
 	case bool:
 		return n
@@ -136,9 +136,9 @@ func toBool(v interface{}) bool {
 		return len(n) > 0
 	case []byte:
 		return len(n) > 0
-	case []interface{}:
+	case []any:
 		return len(n) > 0
-	case map[string]interface{}:
+	case map[string]any:
 		return len(n) > 0
 	case map[any]any:
 		return len(n) > 0
@@ -149,7 +149,7 @@ func toBool(v interface{}) bool {
 // normalize an input for equality checks. All numbers -> float64, []byte to
 // string, etc. Since `rune` is an alias for int32, we can't differentiate it
 // for comparison with strings.
-func normalize(v interface{}) interface{} {
+func normalize(v any) any {
 	switch n := v.(type) {
 	case int:
 		return float64(n)

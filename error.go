@@ -47,7 +47,7 @@ func (e *exprErr) Pretty(source string) string {
 }
 
 // NewError creates a new error at a specific location.
-func NewError(offset uint16, length uint8, format string, a ...interface{}) Error {
+func NewError(offset uint16, length uint8, format string, a ...any) Error {
 	return &exprErr{
 		offset:  offset,
 		length:  length,
