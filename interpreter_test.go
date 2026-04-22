@@ -13,9 +13,10 @@ func TestInterpreter(t *testing.T) {
 		input       string
 		inputParsed any
 		skipTC      bool
+		unordered   bool
 		opts        []InterpreterOption
 		err         string
-		output      interface{}
+		output      any
 	}
 	cases := []test{
 		// Add/sub
@@ -55,6 +56,8 @@ func TestInterpreter(t *testing.T) {
 		{expr: "1 < 2 or 1 > 2", output: true},
 		{expr: "1 < 2 or 2 > 1", output: true},
 		{expr: `1 and "a"`, output: true},
+		{expr: `0 and missing`, input: `{}`, skipTC: true, opts: []InterpreterOption{StrictMode}, output: false},
+		{expr: `1 or missing`, input: `{}`, skipTC: true, opts: []InterpreterOption{StrictMode}, output: true},
 		// Negation
 		{expr: "not (1 < 2)", output: false},
 		{expr: "not (1 < 2) and (3 < 4)", output: false},
@@ -64,12 +67,16 @@ func TestInterpreter(t *testing.T) {
 		{expr: `"foo" == "foo"`, output: true},
 		{expr: `"foo" == "bar"`, output: false},
 		{expr: `"foo\"bar"`, output: `foo"bar`},
+		{expr: `"foo`, err: "unterminated string"},
 		{expr: `"foo" + "bar" == "foobar"`, output: true},
 		{expr: `foo + "a"`, input: `{"foo": 1}`, output: "1a"},
 		{expr: `foo + bar`, input: `{"foo": "id", "bar": 1}`, output: "id1"},
 		{expr: `foo[0]`, input: `{"foo": "hello"}`, output: "h"},
 		{expr: `foo[-1]`, input: `{"foo": "hello"}`, output: "o"},
 		{expr: `foo[0:-3]`, input: `{"foo": "hello"}`, output: "hel"},
+		{expr: `"é".length`, output: 1},
+		{expr: `foo[0]`, input: `{"foo": "éclair"}`, output: "é"},
+		{expr: `foo[1:2]`, input: `{"foo": "héllo"}`, output: "él"},
 		// Unquoted strings
 		{expr: `"foo" == foo`, skipTC: true, output: false},
 		{expr: `"foo" == foo`, opts: []InterpreterOption{UnquotedStrings}, output: true},
@@ -77,7 +84,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: `foo == foo`, opts: []InterpreterOption{UnquotedStrings}, output: true},
 		{expr: `foo == foo`, opts: []InterpreterOption{UnquotedStrings, StrictMode}, output: true},
 		{expr: `foo + 1`, opts: []InterpreterOption{UnquotedStrings}, output: "foo1"},
-		{expr: `@.foo + 1`, opts: []InterpreterOption{UnquotedStrings}, err: "cannot add incompatible types"},
+		{expr: `@.foo + 1`, opts: []InterpreterOption{UnquotedStrings}, err: "cannot operate on incompatible types"},
 		{expr: `@.foo + 1`, opts: []InterpreterOption{UnquotedStrings, StrictMode}, err: "cannot get foo"},
 		{expr: `foo.bar == bar`, opts: []InterpreterOption{UnquotedStrings}, output: false},
 		{expr: `foo.bar == bar`, skipTC: true, opts: []InterpreterOption{UnquotedStrings}, input: `{"foo": {}}`, output: false},
@@ -90,19 +97,20 @@ func TestInterpreter(t *testing.T) {
 		{expr: "foo.bar.baz", input: `{"foo": {"bar": {"baz": 1.0}}}`, output: 1.0},
 		{expr: `foo == "foo"`, input: `{"foo": "foo"}`, output: true},
 		{expr: `foo.in.not`, input: `{"foo": {"in": {"not": 1}}}`, output: 1.0},
-		{expr: `@`, input: `{"hello": "world"}`, output: map[string]interface{}{"hello": "world"}},
+		{expr: `@`, input: `{"hello": "world"}`, output: map[string]any{"hello": "world"}},
 		{expr: `hello.@`, input: `{"hello": "world"}`, output: "world"},
 		// Arrays
 		{expr: "foo[0]", input: `{"foo": [1, 2]}`, output: 1.0},
 		{expr: "foo[-1]", input: `{"foo": [1, 2]}`, output: 2.0},
-		{expr: "foo[:1]", input: `{"foo": [1, 2, 3]}`, output: []interface{}{1.0, 2.0}},
-		{expr: "foo[2:]", input: `{"foo": [1, 2, 3]}`, output: []interface{}{3.0}},
-		{expr: "foo[:-1]", input: `{"foo": [1, 2, 3]}`, output: []interface{}{1.0, 2.0, 3.0}},
+		{expr: "foo[:1]", input: `{"foo": [1, 2, 3]}`, output: []any{1.0, 2.0}},
+		{expr: "foo[:]", input: `{"foo": [1, 2, 3]}`, output: []any{1.0, 2.0, 3.0}},
+		{expr: "foo[2:]", input: `{"foo": [1, 2, 3]}`, output: []any{3.0}},
+		{expr: "foo[:-1]", input: `{"foo": [1, 2, 3]}`, output: []any{1.0, 2.0, 3.0}},
 		{expr: "foo[1 + 2 / 2]", input: `{"foo": [1, 2, 3]}`, output: 3.0},
-		{expr: "foo[1:1 + 2]", input: `{"foo": [1, 2, 3, 4]}`, output: []interface{}{2.0, 3.0, 4.0}},
-		{expr: "foo[foo[0]:bar.baz * 1^2]", input: `{"foo": [1, 2, 3, 4], "bar": {"baz": 3}}`, output: []interface{}{2.0, 3.0, 4.0}},
-		{expr: "foo + bar", input: `{"foo": [1, 2], "bar": [3, 4]}`, output: []interface{}{1.0, 2.0, 3.0, 4.0}},
-		{expr: "foo[bar]", input: `{"foo": [1, 2, 3], "bar": [0, 1]}`, output: []interface{}{1.0, 2.0}},
+		{expr: "foo[1:1 + 2]", input: `{"foo": [1, 2, 3, 4]}`, output: []any{2.0, 3.0, 4.0}},
+		{expr: "foo[foo[0]:bar.baz * 1^2]", input: `{"foo": [1, 2, 3, 4], "bar": {"baz": 3}}`, output: []any{2.0, 3.0, 4.0}},
+		{expr: "foo + bar", input: `{"foo": [1, 2], "bar": [3, 4]}`, output: []any{1.0, 2.0, 3.0, 4.0}},
+		{expr: "foo[bar]", input: `{"foo": [1, 2, 3], "bar": [0, 1]}`, output: []any{1.0, 2.0}},
 		// In
 		{expr: `"foo" in "foobar"`, output: true},
 		{expr: `"foo" in bar`, input: `{"bar": ["foo", "other"]}`, output: true},
@@ -111,10 +119,12 @@ func TestInterpreter(t *testing.T) {
 		{expr: `1 < 2 in "this is true"`, output: true},
 		{expr: `1 < 2 in "this is false"`, output: false},
 		{expr: `"bar" in foo`, input: `{"foo": {"bar": 1}}`, output: true},
+		{expr: `"bar" in foo`, input: `{"foo": {"bar": null}}`, output: true},
 		// Contains
 		{expr: `"foobar" contains "foo"`, output: true},
 		{expr: `"foobar" contains "baz"`, output: false},
 		{expr: `labels contains "foo"`, input: `{"labels": ["foo", "bar"]}`, output: true},
+		{expr: `foo contains "bar"`, input: `{"foo": {"bar": null}}`, output: true},
 		// Starts / ends with
 		{expr: `"foo" startsWith "f"`, output: true},
 		{expr: `"foo" startsWith "o"`, output: false},
@@ -137,13 +147,15 @@ func TestInterpreter(t *testing.T) {
 		{expr: `str.lower`, input: `{"str": "ABCD"}`, output: "abcd"},
 		{expr: `str.lower == abcd`, input: `{"str": "ABCD"}`, opts: []InterpreterOption{UnquotedStrings}, skipTC: true, output: true},
 		// Where
-		{expr: `items where id > 3`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: []interface{}{map[string]interface{}{"id": 5.0}, map[string]interface{}{"id": 7.0}}},
-		{expr: `items where id > 3 where labels contains "foo"`, input: `{"items": [{"id": 1, "labels": ["foo"]}, {"id": 3}, {"id": 5, "labels": ["foo"]}, {"id": 7}]}`, output: []interface{}{map[string]interface{}{"id": 5.0, "labels": []interface{}{"foo"}}}},
+		{expr: `items where id > 3`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: []any{map[string]any{"id": 5.0}, map[string]any{"id": 7.0}}},
+		{expr: `items where id > 3 where labels contains "foo"`, input: `{"items": [{"id": 1, "labels": ["foo"]}, {"id": 3}, {"id": 5, "labels": ["foo"]}, {"id": 7}]}`, output: []any{map[string]any{"id": 5.0, "labels": []any{"foo"}}}},
 		{expr: `(items where id > 3).length == 2`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: true},
 		{expr: `not (items where id > 3)`, input: `{"items": [{"id": 1}, {"id": 3}, {"id": 5}, {"id": 7}]}`, output: false},
 		{expr: `items where id > 3`, input: `{}`, skipTC: true, output: nil},
 		{expr: `foo where method == "GET"`, input: `{"foo": {"op1": {"method": "GET", "path": "/op1"}, "op2": {"method": "PUT", "path": "/op2"}, "op3": {"method": "DELETE", "path": "/op3"}}}`, output: []any{map[string]any{"method": "GET", "path": "/op1"}}},
 		{expr: `foo where method == "GET"`, inputParsed: map[any]any{"foo": map[any]any{"op1": map[any]any{"method": "GET", "path": "/op1"}, "op2": map[any]any{"method": "PUT", "path": "/op2"}, "op3": map[any]any{"method": "DELETE", "path": "/op3"}}}, output: []any{map[any]any{"method": "GET", "path": "/op1"}}},
+		{expr: `items where id > 0`, input: `{"items": [{"id": 1}, "x", {"id": 2}]}`, output: []any{map[string]any{"id": 1.0}, map[string]any{"id": 2.0}}},
+		{expr: `foo where id > 0`, input: `{"foo": {"a": "x", "b": {"id": 1}, "c": {"id": 2}}}`, unordered: true, output: []any{map[string]any{"id": 1.0}, map[string]any{"id": 2.0}}},
 		{expr: `items where id > 3`, input: `{"items": []}`, err: "where clause requires a non-empty array or object"},
 		{expr: `items where id > 3`, input: `{"items": 1}`, skipTC: true, output: []any{}},
 		// Order of operations
@@ -165,7 +177,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: `1 <`, err: "incomplete expression"},
 		{expr: `1 +`, err: "incomplete expression"},
 		{expr: `1 ]`, err: "expected eof but found right-bracket"},
-		{expr: `0.5 + 1"`, err: "expected eof but found string"},
+		{expr: `0.5 + 1"`, err: "unterminated string"},
 		{expr: `0.5 > "some kind of string"`, err: "unable to convert to number"},
 		{expr: `foo beginswith "bar"`, input: `{"foo": "bar"}`, err: "expected eof"},
 		{expr: `1 / (foo * 1)`, input: `{"foo": 0}`, err: "cannot divide by zero"},
@@ -223,6 +235,37 @@ func TestInterpreter(t *testing.T) {
 			} else {
 				if err != nil {
 					t.Fatal(err.Pretty(tc.expr))
+				}
+				if tc.unordered {
+					expectedSlice, ok := tc.output.([]any)
+					if !ok {
+						t.Fatalf("unordered test expected []any output, got %T", tc.output)
+					}
+					resultSlice, ok := result.([]any)
+					if !ok {
+						t.Fatalf("unordered test expected []any result, got %T", result)
+					}
+					if len(expectedSlice) != len(resultSlice) {
+						t.Fatalf("expected %v but found %v", tc.output, result)
+					}
+					used := make([]bool, len(resultSlice))
+					for _, expected := range expectedSlice {
+						matched := false
+						for idx, actual := range resultSlice {
+							if used[idx] {
+								continue
+							}
+							if reflect.DeepEqual(expected, actual) {
+								used[idx] = true
+								matched = true
+								break
+							}
+						}
+						if !matched {
+							t.Fatalf("expected %v but found %v", tc.output, result)
+						}
+					}
+					return
 				}
 				if !reflect.DeepEqual(tc.output, result) {
 					t.Fatalf("expected %v but found %v", tc.output, result)
@@ -491,7 +534,7 @@ func Benchmark(b *testing.B) {
 		name   string
 		mexpr  string
 		expr   string
-		result interface{}
+		result any
 	}{
 		{"field", `baz`, `baz`, "value"},
 		{"comparison", `foo.bar > 1000`, `foo.bar > 1000`, true},
@@ -507,13 +550,13 @@ func Benchmark(b *testing.B) {
 		},
 	}
 
-	var r interface{}
-	input := map[string]interface{}{
-		"foo": map[string]interface{}{
+	var r any
+	input := map[string]any{
+		"foo": map[string]any{
 			"bar": 1000000000.0,
 		},
 		"baz": "value",
-		"arr": []interface{}{1, 2, 3},
+		"arr": []any{1, 2, 3},
 	}
 
 	for _, bm := range benchmarks {

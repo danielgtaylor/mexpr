@@ -49,7 +49,7 @@ type Node struct {
 	Offset uint16
 	Left   *Node
 	Right  *Node
-	Value  interface{}
+	Value  any
 }
 
 // String converts the node to a string representation (basically the node name
@@ -304,14 +304,21 @@ func (p *parser) nud(t *Token) (*Node, Error) {
 		return &Node{Type: NodeSign, Value: value, Offset: offset, Length: uint8(t.Offset + uint16(t.Length) - offset), Right: result}, nil
 	case TokenSlice:
 		offset := t.Offset
+		if p.token.Type == TokenRightBracket {
+			return &Node{
+				Type:   NodeSlice,
+				Offset: offset,
+				Length: t.Length,
+				Left:   &Node{Type: NodeLiteral, Value: 0.0, Offset: offset},
+				Right:  &Node{Type: NodeLiteral, Value: -1.0, Offset: offset},
+			}, nil
+		}
 		result, err := p.parse(bindingPowers[t.Type])
 		if err != nil {
 			return nil, err
 		}
-		// Create a dummy left node with value 0, the start of the slice. This also
-		// sets the parent node's value to a pre-allocated list of [0, 0] which is
-		// used later by the interpreter. It prevents additional allocations.
-		return &Node{Type: NodeSlice, Offset: offset, Length: uint8(t.Offset + uint16(t.Length) - offset), Left: &Node{Type: NodeLiteral, Value: 0.0, Offset: offset}, Right: result, Value: []interface{}{0.0, 0.0}}, nil
+		// Create a dummy left node with value 0, the start of the slice.
+		return &Node{Type: NodeSlice, Offset: offset, Length: uint8(t.Offset + uint16(t.Length) - offset), Left: &Node{Type: NodeLiteral, Value: 0.0, Offset: offset}, Right: result}, nil
 	case TokenRightParen:
 		return nil, NewError(t.Offset, t.Length, "unexpected right-paren")
 	case TokenRightBracket:
@@ -423,16 +430,12 @@ func (p *parser) led(t *Token, n *Node) (*Node, Error) {
 		return p.ensure(n, err, TokenRightBracket)
 	case TokenSlice:
 		if p.token.Type == TokenRightBracket {
-			// This sets the parent node's value to a pre-allocated list of [0, 0]
-			// which is used later by the interpreter. It prevents additional
-			// allocations.
-			return &Node{Type: NodeSlice, Offset: t.Offset, Length: t.Length, Left: n, Right: &Node{Type: NodeLiteral, Offset: t.Offset, Value: -1.0}, Value: []interface{}{0.0, 0.0}}, nil
+			return &Node{Type: NodeSlice, Offset: t.Offset, Length: t.Length, Left: n, Right: &Node{Type: NodeLiteral, Offset: t.Offset, Value: -1.0}}, nil
 		}
 		nn, err := p.newNodeParseRight(n, t, NodeSlice, bindingPowers[t.Type])
 		if err != nil {
 			return nil, err
 		}
-		nn.Value = []interface{}{0.0, 0.0}
 		return nn, nil
 	case TokenLeftParen:
 		if n.Type != NodeIdentifier {

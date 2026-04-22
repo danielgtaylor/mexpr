@@ -234,8 +234,9 @@ func (l *lexer) consumeIdentifier() *Token {
 
 // consumeString reads runes from the expression until a non-escaped double
 // quote is encountered. Only double-quoted strings are supported.
-func (l *lexer) consumeString() *Token {
+func (l *lexer) consumeString() (*Token, Error) {
 	buf := bytes.NewBuffer(make([]byte, 0, 8))
+	offset := l.pos - l.lastWidth
 	for {
 		r := l.next()
 		if r == '\\' && l.peek() == '"' {
@@ -243,12 +244,18 @@ func (l *lexer) consumeString() *Token {
 			buf.WriteRune('"')
 			continue
 		}
-		if r == -1 || r == '"' {
+		if r == -1 {
+			return nil, NewError(offset, 1, "unterminated string")
+		}
+		if r == '"' {
 			break
 		}
 		buf.WriteRune(r)
 	}
-	return l.newToken(TokenString, buf.String())
+	tok := l.newToken(TokenString, buf.String())
+	tok.Offset = offset
+	tok.Length = uint8(l.pos - offset)
+	return tok, nil
 }
 
 func (l *lexer) Next() (*Token, Error) {
@@ -296,7 +303,7 @@ func (l *lexer) Next() (*Token, Error) {
 	}
 
 	if r == '"' {
-		return l.consumeString(), nil
+		return l.consumeString()
 	}
 
 	return l.consumeIdentifier(), nil

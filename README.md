@@ -33,7 +33,7 @@ Try it out on the [Go Playground](https://play.golang.org/p/Z0UcEBgfxu_r)! You c
 import "github.com/danielgtaylor/mexpr"
 
 // Convenience for lexing/parsing/running in one step:
-result, err := mexpr.Eval("a > b", map[string]interface{}{
+result, err := mexpr.Eval("a > b", map[string]any{
 	"a": 2,
 	"b": 1,
 })
@@ -42,18 +42,18 @@ result, err := mexpr.Eval("a > b", map[string]interface{}{
 // omitted for brevity.
 l := mexpr.NewLexer("a > b")
 p := mexpr.NewParser(l)
-ast, err := mexpr.Parse()
-typeExamples = map[string]interface{}{
+ast, err := p.Parse()
+typeExamples := map[string]any{
 	"a": 2,
 	"b": 1,
 }
-err := mexpr.TypeCheck(ast, typeExamples)
+err = mexpr.TypeCheck(ast, typeExamples)
 interpreter := mexpr.NewInterpreter(ast)
-result1, err := interpreter.Run(map[string]interface{}{
+result1, err := interpreter.Run(map[string]any{
 	"a": 1,
 	"b": 2,
 })
-result2, err := interpreter.Run(map[string]interfae{}{
+result2, err := interpreter.Run(map[string]any{
 	"a": 150,
 	"b": 30,
 })
@@ -80,10 +80,11 @@ When running the interpreter a set of options can be passed in to change behavio
 
 ```go
 // Using the top-level eval
-mexpr.Eval(expression, inputObj, StrictMode)
+result, err := mexpr.Eval(expression, inputObj, mexpr.StrictMode)
 
 // Using an interpreter instance
-interpreter.Run(inputObj, StrictMode)
+interpreter := mexpr.NewInterpreter(ast, mexpr.StrictMode)
+result, err = interpreter.Run(inputObj)
 ```
 
 ## Syntax
@@ -189,7 +190,7 @@ Indexes are zero-based. Slice indexes are optional and are _inclusive_. `foo[1:2
 
 Any value concatenated with a string will result in a string. For example `"id" + 1` will result in `"id1"`.
 
-There is no distinction between strings, bytes, or runes. Everything is treated as a string.
+String length, indexing, and slicing are Unicode-aware and operate on runes rather than raw bytes.
 
 #### Date Comparisons
 
