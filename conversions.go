@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"time"
+	"unicode/utf8"
 )
 
 func isNumber(v interface{}) bool {
@@ -66,6 +67,18 @@ func toString(v interface{}) string {
 		return string(s)
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+func stringLength(v string) int {
+	return utf8.RuneCountInString(v)
+}
+
+func stringIndex(v string, idx int) string {
+	return string([]rune(v)[idx])
+}
+
+func stringSlice(v string, start, end int) string {
+	return string([]rune(v)[start : end+1])
 }
 
 // toTime converts a string value into a time.Time if possible, otherwise

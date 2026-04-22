@@ -300,6 +300,16 @@ func (p *parser) nud(t *Token) (*Node, Error) {
 		return &Node{Type: NodeSign, Value: value, Offset: offset, Length: uint8(t.Offset + uint16(t.Length) - offset), Right: result}, nil
 	case TokenSlice:
 		offset := t.Offset
+		if p.token.Type == TokenRightBracket {
+			return &Node{
+				Type:   NodeSlice,
+				Offset: offset,
+				Length: t.Length,
+				Left:   &Node{Type: NodeLiteral, Value: 0.0, Offset: offset},
+				Right:  &Node{Type: NodeLiteral, Value: -1.0, Offset: offset},
+				Value:  []interface{}{0.0, 0.0},
+			}, nil
+		}
 		result, err := p.parse(bindingPowers[t.Type])
 		if err != nil {
 			return nil, err

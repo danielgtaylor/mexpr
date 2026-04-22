@@ -69,6 +69,46 @@ func newSchema(t valueType) *schema {
 	return &schema{typeName: t}
 }
 
+func mergeSchema(a, b *schema) *schema {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+	if a.typeName == typeUnknown || b.typeName == typeUnknown {
+		return newSchema(typeUnknown)
+	}
+	if a.typeName != b.typeName {
+		return newSchema(typeUnknown)
+	}
+	switch a.typeName {
+	case typeArray:
+		return &schema{
+			typeName: typeArray,
+			items:    mergeSchema(a.items, b.items),
+		}
+	case typeObject:
+		merged := &schema{
+			typeName:   typeObject,
+			properties: map[string]*schema{},
+		}
+		for k, v := range a.properties {
+			merged.properties[k] = v
+		}
+		for k, v := range b.properties {
+			if existing, ok := merged.properties[k]; ok {
+				merged.properties[k] = mergeSchema(existing, v)
+				continue
+			}
+			merged.properties[k] = v
+		}
+		return merged
+	default:
+		return a
+	}
+}
+
 func getSchema(v any) *schema {
 	switch i := v.(type) {
 	case bool:
@@ -79,8 +119,8 @@ func getSchema(v any) *schema {
 		return schemaString
 	case []any:
 		s := newSchema(typeArray)
-		if len(i) > 0 {
-			s.items = getSchema(i[0])
+		for _, item := range i {
+			s.items = mergeSchema(s.items, getSchema(item))
 		}
 		return s
 	case map[string]any:
@@ -165,6 +205,9 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 		}
 		errValue := value
 		if s, ok := value.(*schema); ok {
+			if s.typeName == typeUnknown {
+				return newSchema(typeUnknown), nil
+			}
 			if v, ok := s.properties[ast.Value.(string)]; ok {
 				return v, nil
 			}
@@ -213,6 +256,9 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 		if err != nil {
 			return nil, err
 		}
+		if leftType.typeName == typeUnknown || rightType.typeName == typeUnknown {
+			return newSchema(typeUnknown), nil
+		}
 		if !(leftType.isString() || leftType.isArray()) {
 			return nil, NewError(ast.Offset, ast.Length, "can only index strings or arrays but got %v", leftType)
 		}
@@ -231,6 +277,11 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 		leftType, rightType, err := i.runBoth(ast, value)
 		if err != nil {
 			return nil, err
+		}
+		if leftType.typeName == typeUnknown || rightType.typeName == typeUnknown {
+			s := newSchema(typeArray)
+			s.items = newSchema(typeUnknown)
+			return s, nil
 		}
 		if !leftType.isNumber() {
 			return nil, NewError(ast.Offset, ast.Length, "slice index must be a number but found %s", leftType)
@@ -257,6 +308,9 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 		if err != nil {
 			return nil, err
 		}
+		if leftType.typeName == typeUnknown || rightType.typeName == typeUnknown {
+			return newSchema(typeUnknown), nil
+		}
 		if ast.Type == NodeAdd {
 			if leftType.isString() || rightType.isString() {
 				return schemaString, nil
@@ -277,6 +331,9 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 		if err != nil {
 			return nil, err
 		}
+		if leftType.typeName == typeUnknown || rightType.typeName == typeUnknown {
+			return schemaBool, nil
+		}
 		if !leftType.isNumber() || !rightType.isNumber() {
 			return nil, NewError(ast.Offset, ast.Length, "cannot compare %s with %s", leftType, rightType)
 		}
@@ -293,13 +350,14 @@ func (i *typeChecker) run(ast *Node, value any) (*schema, Error) {
 			return nil, err
 		}
 		if leftType.isObject() {
-			keys := mapKeys(leftType.properties)
+			objectType := leftType
+			keys := mapKeys(objectType.properties)
 			sort.Strings(keys)
 			if len(keys) > 0 {
-				// Pick the first prop as the representative item type.
-				prop := leftType.properties[keys[0]]
 				leftType = newSchema(typeArray)
-				leftType.items = prop
+				for _, key := range keys {
+					leftType.items = mergeSchema(leftType.items, objectType.properties[key])
+				}
 			}
 		}
 		if !leftType.isArray() || leftType.items == nil {

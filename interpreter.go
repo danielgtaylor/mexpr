@@ -37,8 +37,8 @@ func checkBounds(ast *Node, input any, idx int) Error {
 		}
 	}
 	if v, ok := input.(string); ok {
-		if idx < 0 || idx >= len(v) {
-			return NewError(ast.Offset, ast.Length, "invalid index %d for string of length %d", int(idx), len(v))
+		if idx < 0 || idx >= stringLength(v) {
+			return NewError(ast.Offset, ast.Length, "invalid index %d for string of length %d", int(idx), stringLength(v))
 		}
 	}
 	return nil
@@ -97,7 +97,7 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		case "length":
 			// Special pseudo-property to get the value's length.
 			if s, ok := value.(string); ok {
-				return len(s), nil
+				return stringLength(s), nil
 			}
 			if a, ok := value.([]any); ok {
 				return len(a), nil
@@ -178,11 +178,12 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				return left[int(start) : int(end)+1], nil
 			}
 			left := toString(resultLeft)
+			leftLen := stringLength(left)
 			if start < 0 {
-				start += float64(len(left))
+				start += float64(leftLen)
 			}
 			if end < 0 {
-				end += float64(len(left))
+				end += float64(leftLen)
 			}
 			if err := checkBounds(ast, left, int(start)); err != nil {
 				return nil, err
@@ -193,7 +194,7 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			if err := checkBounds(ast, left, int(end)); err != nil {
 				return nil, err
 			}
-			return left[int(start) : int(end)+1], nil
+			return stringSlice(left, int(start), int(end)), nil
 		}
 		if isNumber(resultRight) {
 			idx, err := toNumber(ast, resultRight)
@@ -211,12 +212,12 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			}
 			left := toString(resultLeft)
 			if idx < 0 {
-				idx += float64(len(left))
+				idx += float64(stringLength(left))
 			}
 			if err := checkBounds(ast, left, int(idx)); err != nil {
 				return nil, err
 			}
-			return string(left[int(idx)]), nil
+			return stringIndex(left, int(idx)), nil
 		}
 		return nil, NewError(ast.Offset, ast.Length, "array index must be number or slice %v", resultRight)
 	case NodeSlice:
@@ -228,9 +229,7 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		if err != nil {
 			return nil, err
 		}
-		ast.Value.([]any)[0] = resultLeft
-		ast.Value.([]any)[1] = resultRight
-		return ast.Value, nil
+		return []any{resultLeft, resultRight}, nil
 	case NodeLiteral:
 		return ast.Value, nil
 	case NodeSign:
@@ -294,7 +293,7 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				return math.Pow(left, right), nil
 			}
 		}
-		return nil, NewError(ast.Offset, ast.Length, "cannot add incompatible types %v and %v", resultLeft, resultRight)
+		return nil, NewError(ast.Offset, ast.Length, "cannot operate on incompatible types %v and %v", resultLeft, resultRight)
 	case NodeEqual, NodeNotEqual, NodeLessThan, NodeLessThanEqual, NodeGreaterThan, NodeGreaterThanEqual:
 		resultLeft, err := i.run(ast.Left, value)
 		if err != nil {
@@ -335,17 +334,26 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		if err != nil {
 			return nil, err
 		}
-		resultRight, err := i.run(ast.Right, value)
-		if err != nil {
-			return nil, err
-		}
 		left := toBool(resultLeft)
-		right := toBool(resultRight)
 		switch ast.Type {
 		case NodeAnd:
-			return left && right, nil
+			if !left {
+				return false, nil
+			}
+			resultRight, err := i.run(ast.Right, value)
+			if err != nil {
+				return nil, err
+			}
+			return toBool(resultRight), nil
 		case NodeOr:
-			return left || right, nil
+			if left {
+				return true, nil
+			}
+			resultRight, err := i.run(ast.Right, value)
+			if err != nil {
+				return nil, err
+			}
+			return toBool(resultRight), nil
 		}
 	case NodeBefore, NodeAfter:
 		resultLeft, err := i.run(ast.Left, value)
@@ -389,16 +397,12 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				return false, nil
 			}
 			if m, ok := resultRight.(map[string]any); ok {
-				if m[toString(resultLeft)] != nil {
-					return true, nil
-				}
-				return false, nil
+				_, ok := m[toString(resultLeft)]
+				return ok, nil
 			}
 			if m, ok := resultRight.(map[any]any); ok {
-				if m[resultLeft] != nil {
-					return true, nil
-				}
-				return false, nil
+				_, ok := m[resultLeft]
+				return ok, nil
 			}
 			return strings.Contains(toString(resultRight), toString(resultLeft)), nil
 		case NodeContains:
@@ -411,16 +415,12 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				return false, nil
 			}
 			if m, ok := resultLeft.(map[string]any); ok {
-				if m[toString(resultRight)] != nil {
-					return true, nil
-				}
-				return false, nil
+				_, ok := m[toString(resultRight)]
+				return ok, nil
 			}
 			if m, ok := resultLeft.(map[any]any); ok {
-				if m[resultRight] != nil {
-					return true, nil
-				}
-				return false, nil
+				_, ok := m[resultRight]
+				return ok, nil
 			}
 			return strings.Contains(toString(resultLeft), toString(resultRight)), nil
 		case NodeStartsWith:
