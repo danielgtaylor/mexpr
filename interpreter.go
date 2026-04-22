@@ -232,12 +232,14 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		if err != nil {
 			return nil, err
 		}
-		if isSlice(resultRight) && len(resultRight.([]any)) == 2 {
-			start, err := toNumber(ast, resultRight.([]any)[0])
+		if rightLen, ok := sliceLen(resultRight); ok && rightLen == 2 {
+			startValue, _ := sliceItem(resultRight, 0)
+			start, err := toNumber(ast, startValue)
 			if err != nil {
 				return nil, err
 			}
-			end, err := toNumber(ast, resultRight.([]any)[1])
+			endValue, _ := sliceItem(resultRight, 1)
+			end, err := toNumber(ast, endValue)
 			if err != nil {
 				return nil, err
 			}

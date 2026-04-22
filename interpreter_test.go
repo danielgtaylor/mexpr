@@ -350,6 +350,7 @@ func TestTypedSlices(t *testing.T) {
 		"ints":    []int{1, 2, 3},
 		"floats":  []float64{1.5, 2.5, 3.5},
 		"strings": []string{"alpha", "beta", "gamma"},
+		"bounds":  []int{0, 1},
 	}
 
 	cases := []struct {
@@ -358,6 +359,7 @@ func TestTypedSlices(t *testing.T) {
 	}{
 		{expr: "ints[1]", output: 2},
 		{expr: "ints[1:]", output: []int{2, 3}},
+		{expr: "ints[bounds]", output: []int{1, 2}},
 		{expr: "ints + ints", output: []int{1, 2, 3, 1, 2, 3}},
 		{expr: `2 in ints`, output: true},
 		{expr: `strings contains "beta"`, output: true},
