@@ -107,12 +107,30 @@ func stringLength(v string) int {
 	return utf8.RuneCountInString(v)
 }
 
+func runeIndexToByteOffset(v string, idx int) int {
+	if idx <= 0 {
+		return 0
+	}
+
+	offset := 0
+	for i := 0; i < idx && offset < len(v); i++ {
+		_, size := utf8.DecodeRuneInString(v[offset:])
+		offset += size
+	}
+
+	return offset
+}
+
 func stringIndex(v string, idx int) string {
-	return string([]rune(v)[idx])
+	start := runeIndexToByteOffset(v, idx)
+	end := runeIndexToByteOffset(v, idx+1)
+	return v[start:end]
 }
 
 func stringSlice(v string, start, end int) string {
-	return string([]rune(v)[start : end+1])
+	from := runeIndexToByteOffset(v, start)
+	to := runeIndexToByteOffset(v, end+1)
+	return v[from:to]
 }
 
 // toTime converts a string value into a time.Time if possible, otherwise

@@ -47,7 +47,7 @@ typeExamples := map[string]any{
 	"a": 2,
 	"b": 1,
 }
-err := mexpr.TypeCheck(ast, typeExamples)
+err = mexpr.TypeCheck(ast, typeExamples)
 interpreter := mexpr.NewInterpreter(ast)
 result1, err := interpreter.Run(map[string]any{
 	"a": 1,

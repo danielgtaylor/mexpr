@@ -38,8 +38,9 @@ func checkBounds(ast *Node, input any, idx int) Error {
 		}
 	}
 	if v, ok := input.(string); ok {
-		if idx < 0 || idx >= stringLength(v) {
-			return NewError(ast.Offset, ast.Length, "invalid index %d for string of length %d", int(idx), stringLength(v))
+		length := stringLength(v)
+		if idx < 0 || idx >= length {
+			return NewError(ast.Offset, ast.Length, "invalid index %d for string of length %d", int(idx), length)
 		}
 	}
 	return nil

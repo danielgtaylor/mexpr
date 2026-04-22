@@ -236,6 +236,7 @@ func (l *lexer) consumeIdentifier() *Token {
 // quote is encountered. Only double-quoted strings are supported.
 func (l *lexer) consumeString() (*Token, Error) {
 	buf := bytes.NewBuffer(make([]byte, 0, 8))
+	offset := l.pos - l.lastWidth
 	for {
 		r := l.next()
 		if r == '\\' && l.peek() == '"' {
@@ -244,7 +245,7 @@ func (l *lexer) consumeString() (*Token, Error) {
 			continue
 		}
 		if r == -1 {
-			return nil, NewError(l.pos, 1, "unterminated string")
+			return nil, NewError(offset, 1, "unterminated string")
 		}
 		if r == '"' {
 			break
