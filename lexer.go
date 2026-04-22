@@ -252,7 +252,10 @@ func (l *lexer) consumeString() (*Token, Error) {
 		}
 		buf.WriteRune(r)
 	}
-	return l.newToken(TokenString, buf.String()), nil
+	tok := l.newToken(TokenString, buf.String())
+	tok.Offset = offset
+	tok.Length = uint8(l.pos - offset)
+	return tok, nil
 }
 
 func (l *lexer) Next() (*Token, Error) {
