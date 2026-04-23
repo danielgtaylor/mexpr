@@ -19,8 +19,8 @@ func parseInterpreterOptions(options []InterpreterOption) (bool, bool) {
 // passed, it should be a set of representative example values for the input
 // which will be used to type check the expression against.
 func Parse(expression string, types any, options ...InterpreterOption) (*Node, Error) {
-	l := NewLexer(expression)
-	p := NewParser(l)
+	l := lexer{expression: expression}
+	p := parser{lexer: &l}
 	ast, err := p.Parse()
 	if err != nil {
 		return nil, err
