@@ -1,15 +1,19 @@
 package mexpr
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+	"unicode/utf8"
+)
 
 // Error represents an error at a specific location.
 type Error interface {
 	Error() string
 
-	// Offset returns the character offset of the error within the experssion.
+	// Offset returns the rune offset of the error within the expression.
 	Offset() uint16
 
-	// Length returns the length in bytes after the offset where the error ends.
+	// Length returns the rune length after the offset where the error ends.
 	Length() uint8
 
 	// Pretty prints out a message with a pointer to the source location of the
@@ -36,14 +40,22 @@ func (e *exprErr) Length() uint8 {
 }
 
 func (e *exprErr) Pretty(source string) string {
-	msg := e.Error() + "\n" + source + "\n"
+	var msg strings.Builder
+	msg.WriteString(e.Error())
+	msg.WriteByte('\n')
+	msg.WriteString(source)
+	msg.WriteByte('\n')
 	for i := uint16(0); i < e.offset; i++ {
-		msg += "."
+		msg.WriteByte('.')
 	}
-	for i := uint8(0); i < e.length; i++ {
-		msg += "^"
+	length := e.length
+	if length == 0 && utf8.RuneCountInString(source) > int(e.offset) {
+		length = 1
 	}
-	return msg
+	for i := uint8(0); i < length; i++ {
+		msg.WriteByte('^')
+	}
+	return msg.String()
 }
 
 // NewError creates a new error at a specific location.

@@ -28,7 +28,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: `1_000_000 + 1`, output: 1000001.0},
 		// Mul/div
 		{expr: "4 * 5 / 10", output: 2.0},
-		{expr: `19 % x`, input: `{"x": 5}`, output: 4},
+		{expr: `19 % x`, input: `{"x": 5}`, output: 4.0},
 		// Power
 		{expr: "2^3", output: 8.0},
 		{expr: "2^3^2", output: 512.0},
@@ -156,7 +156,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: `foo where method == "GET"`, inputParsed: map[any]any{"foo": map[any]any{"op1": map[any]any{"method": "GET", "path": "/op1"}, "op2": map[any]any{"method": "PUT", "path": "/op2"}, "op3": map[any]any{"method": "DELETE", "path": "/op3"}}}, output: []any{map[any]any{"method": "GET", "path": "/op1"}}},
 		{expr: `items where id > 0`, input: `{"items": [{"id": 1}, "x", {"id": 2}]}`, output: []any{map[string]any{"id": 1.0}, map[string]any{"id": 2.0}}},
 		{expr: `foo where id > 0`, input: `{"foo": {"a": "x", "b": {"id": 1}, "c": {"id": 2}}}`, unordered: true, output: []any{map[string]any{"id": 1.0}, map[string]any{"id": 2.0}}},
-		{expr: `items where id > 3`, input: `{"items": []}`, err: "where clause requires a non-empty array or object"},
+		{expr: `items where id > 3`, input: `{"items": []}`, output: []any{}},
 		{expr: `items where id > 3`, input: `{"items": 1}`, skipTC: true, output: []any{}},
 		// Order of operations
 		{expr: "1 + 2 + 3", output: 6.0},
@@ -168,7 +168,7 @@ func TestInterpreter(t *testing.T) {
 		{expr: "6 -", err: "incomplete expression"},
 		{expr: `foo.bar + "baz"`, input: `{"foo": 1}`, err: "no property bar"},
 		{expr: `foo + 1`, input: `{"foo": [1, 2]}`, err: "cannot operate on incompatible types"},
-		{expr: `foo > 1`, input: `{"foo": []}`, err: "cannot compare array[<nil>] with number"},
+		{expr: `foo > 1`, input: `{"foo": []}`, err: "cannot compare array[unknown] with number"},
 		{expr: `foo[1-]`, input: `{"foo": "hello"}`, err: "unexpected right-bracket"},
 		{expr: `not (1- <= 5)`, err: "missing right operand"},
 		{expr: `(1 >=)`, err: "unexpected right-paren"},
@@ -311,6 +311,7 @@ func TestTypedFunctions(t *testing.T) {
 		{expr: "name.lower == \"mexpr\"", output: true},
 		{expr: "name.length == 5", output: true},
 		{expr: "enabled and a > 1", output: true},
+		{expr: "add(1.9, 2.1)", output: 3},
 		{expr: "add(a)", err: "expects 2 parameter"},
 		{expr: "isAdmin(a)", err: "expects string but found number"},
 		{expr: "toggle(a)", err: "expects boolean but found number"},
@@ -341,6 +342,229 @@ func TestTypedFunctions(t *testing.T) {
 				t.Fatalf("expected %v but found %v", tc.output, result)
 			}
 		})
+	}
+}
+
+func TestTypedSlices(t *testing.T) {
+	input := map[string]any{
+		"ints":    []int{1, 2, 3},
+		"floats":  []float64{1.5, 2.5, 3.5},
+		"strings": []string{"alpha", "beta", "gamma"},
+		"bounds":  []int{0, 1},
+	}
+
+	cases := []struct {
+		expr   string
+		output any
+	}{
+		{expr: "ints[1]", output: 2},
+		{expr: "ints[1:]", output: []int{2, 3}},
+		{expr: "ints[bounds]", output: []int{1, 2}},
+		{expr: "ints + ints", output: []int{1, 2, 3, 1, 2, 3}},
+		{expr: `2 in ints`, output: true},
+		{expr: `strings contains "beta"`, output: true},
+		{expr: `strings[1]`, output: "beta"},
+		{expr: `floats.length`, output: 3},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.expr, func(t *testing.T) {
+			ast, err := Parse(tc.expr, input)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+			result, err := Run(ast, input)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+			if !reflect.DeepEqual(tc.output, result) {
+				t.Fatalf("expected %v but found %v", tc.output, result)
+			}
+		})
+	}
+}
+
+func TestReflectionBackedSlices(t *testing.T) {
+	input := map[string]any{
+		"uints":      []uint{1, 2, 3},
+		"emptyUints": []uint{},
+	}
+
+	cases := []struct {
+		expr   string
+		output any
+	}{
+		{expr: "uints[1]", output: uint(2)},
+		{expr: "uints[:1]", output: []uint{1, 2}},
+		{expr: "uints[1:2]", output: []uint{2, 3}},
+		{expr: "uints + uints", output: []any{uint(1), uint(2), uint(3), uint(1), uint(2), uint(3)}},
+		{expr: `2 in uints`, output: true},
+		{expr: `uints.length`, output: 3},
+		{expr: `uints and 1`, output: true},
+		{expr: `emptyUints or 1`, output: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.expr, func(t *testing.T) {
+			ast, err := Parse(tc.expr, input)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+			result, err := Run(ast, input)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+			if !reflect.DeepEqual(tc.output, result) {
+				t.Fatalf("expected %v but found %v", tc.output, result)
+			}
+		})
+	}
+}
+
+func TestTruthinessConversions(t *testing.T) {
+	cases := []struct {
+		name   string
+		expr   string
+		input  map[string]any
+		output any
+	}{
+		{name: "int64 true", expr: "value and 1", input: map[string]any{"value": int64(2)}, output: true},
+		{name: "int64 false", expr: "value or 0", input: map[string]any{"value": int64(-1)}, output: false},
+		{name: "uint8 true", expr: "value and 1", input: map[string]any{"value": uint8(1)}, output: true},
+		{name: "float32 false", expr: "value or 0", input: map[string]any{"value": float32(0)}, output: false},
+		{name: "bytes true", expr: "value and 1", input: map[string]any{"value": []byte("x")}, output: true},
+		{name: "bytes false", expr: "value or 0", input: map[string]any{"value": []byte{}}, output: false},
+		{name: "map any true", expr: "value and 1", input: map[string]any{"value": map[any]any{"k": 1}}, output: true},
+		{name: "map any false", expr: "value or 0", input: map[string]any{"value": map[any]any{}}, output: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := Parse(tc.expr, tc.input)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+			result, err := Run(ast, tc.input)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+			if !reflect.DeepEqual(tc.output, result) {
+				t.Fatalf("expected %v but found %v", tc.output, result)
+			}
+		})
+	}
+}
+
+func TestAdditionalNumericConversions(t *testing.T) {
+	cases := []struct {
+		name   string
+		expr   string
+		input  map[string]any
+		output any
+	}{
+		{name: "int8 and uint16", expr: "a + b", input: map[string]any{"a": int8(2), "b": uint16(3)}, output: 5.0},
+		{name: "float32 and literal", expr: "a + 2", input: map[string]any{"a": float32(1.5)}, output: 3.5},
+		{name: "numeric equality", expr: "a == b", input: map[string]any{"a": int16(1), "b": uint8(1)}, output: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := Parse(tc.expr, tc.input)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+			result, err := Run(ast, tc.input)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+			if !reflect.DeepEqual(tc.output, result) {
+				t.Fatalf("expected %v but found %v", tc.output, result)
+			}
+		})
+	}
+}
+
+func TestReflectionBackedArrays(t *testing.T) {
+	input := map[string]any{
+		"arr":  [3]uint{1, 2, 3},
+		"tail": [2]uint{4, 5},
+	}
+
+	cases := []struct {
+		expr   string
+		output any
+	}{
+		{expr: "arr[1]", output: uint(2)},
+		{expr: "arr[:1]", output: []uint{1, 2}},
+		{expr: "arr + tail", output: []any{uint(1), uint(2), uint(3), uint(4), uint(5)}},
+		{expr: "2 in arr", output: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.expr, func(t *testing.T) {
+			ast, err := Parse(tc.expr, input)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+			result, err := Run(ast, input)
+			if err != nil {
+				t.Fatal(err.Pretty(tc.expr))
+			}
+			if !reflect.DeepEqual(tc.output, result) {
+				t.Fatalf("expected %v but found %v", tc.output, result)
+			}
+		})
+	}
+}
+
+func TestEmptyArrayTypeCheck(t *testing.T) {
+	ast, err := Parse(`items where id > 3`, map[string]any{"items": []any{}})
+	if err != nil {
+		t.Fatal(err.Pretty(`items where id > 3`))
+	}
+	result, err := Run(ast, map[string]any{"items": []any{}})
+	if err != nil {
+		t.Fatal(err.Pretty(`items where id > 3`))
+	}
+	if !reflect.DeepEqual([]any{}, result) {
+		t.Fatalf("expected empty result, got %v", result)
+	}
+}
+
+func TestEmptyObjectTypeCheck(t *testing.T) {
+	ast, err := Parse(`items where id > 3`, map[string]any{"items": map[string]any{}})
+	if err != nil {
+		t.Fatal(err.Pretty(`items where id > 3`))
+	}
+	result, err := Run(ast, map[string]any{"items": map[string]any{}})
+	if err != nil {
+		t.Fatal(err.Pretty(`items where id > 3`))
+	}
+	if !reflect.DeepEqual([]any{}, result) {
+		t.Fatalf("expected empty result, got %v", result)
+	}
+}
+
+func TestWhereRequiresArrayOrObject(t *testing.T) {
+	_, err := Parse(`items where id > 3`, map[string]any{"items": 1})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if err.Error() != "where clause requires an array or object, but found number" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNestedNumericEquality(t *testing.T) {
+	result, err := Eval("a == b", map[string]any{
+		"a": []int{1},
+		"b": []float64{1},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != true {
+		t.Fatalf("expected true but found %v", result)
 	}
 }
 

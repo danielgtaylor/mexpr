@@ -140,6 +140,282 @@ func stringSlice(v string, start, end int) string {
 	return v[from:to]
 }
 
+func isByteArrayOrSlice(t reflect.Type) bool {
+	if t == nil {
+		return false
+	}
+	if t.Kind() != reflect.Array && t.Kind() != reflect.Slice {
+		return false
+	}
+	return t.Elem().Kind() == reflect.Uint8
+}
+
+func sliceLen(v any) (int, bool) {
+	switch s := v.(type) {
+	case []any:
+		return len(s), true
+	case []int:
+		return len(s), true
+	case []float64:
+		return len(s), true
+	case []string:
+		return len(s), true
+	}
+
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() || isByteArrayOrSlice(rv.Type()) {
+		return 0, false
+	}
+	if rv.Kind() != reflect.Array && rv.Kind() != reflect.Slice {
+		return 0, false
+	}
+	return rv.Len(), true
+}
+
+func isSlice(v any) bool {
+	_, ok := sliceLen(v)
+	return ok
+}
+
+func sliceItem(v any, idx int) (any, bool) {
+	switch s := v.(type) {
+	case []any:
+		return s[idx], true
+	case []int:
+		return s[idx], true
+	case []float64:
+		return s[idx], true
+	case []string:
+		return s[idx], true
+	}
+
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() || isByteArrayOrSlice(rv.Type()) {
+		return nil, false
+	}
+	if rv.Kind() != reflect.Array && rv.Kind() != reflect.Slice {
+		return nil, false
+	}
+	return rv.Index(idx).Interface(), true
+}
+
+func sliceRange(v any, start, end int) (any, bool) {
+	switch s := v.(type) {
+	case []any:
+		return s[start : end+1], true
+	case []int:
+		return s[start : end+1], true
+	case []float64:
+		return s[start : end+1], true
+	case []string:
+		return s[start : end+1], true
+	}
+
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() || isByteArrayOrSlice(rv.Type()) {
+		return nil, false
+	}
+	if rv.Kind() == reflect.Array {
+		copyValue := reflect.New(rv.Type()).Elem()
+		copyValue.Set(rv)
+		return copyValue.Slice(start, end+1).Interface(), true
+	}
+	if rv.Kind() == reflect.Slice {
+		return rv.Slice(start, end+1).Interface(), true
+	}
+	return nil, false
+}
+
+func appendSliceItems(dst []any, v any) ([]any, bool) {
+	switch s := v.(type) {
+	case []any:
+		return append(dst, s...), true
+	case []int:
+		for _, item := range s {
+			dst = append(dst, item)
+		}
+		return dst, true
+	case []float64:
+		for _, item := range s {
+			dst = append(dst, item)
+		}
+		return dst, true
+	case []string:
+		for _, item := range s {
+			dst = append(dst, item)
+		}
+		return dst, true
+	}
+
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() || isByteArrayOrSlice(rv.Type()) {
+		return nil, false
+	}
+	if rv.Kind() != reflect.Array && rv.Kind() != reflect.Slice {
+		return nil, false
+	}
+	for idx := 0; idx < rv.Len(); idx++ {
+		dst = append(dst, rv.Index(idx).Interface())
+	}
+	return dst, true
+}
+
+func concatSlices(left, right any) (any, bool) {
+	switch l := left.(type) {
+	case []any:
+		if r, ok := right.([]any); ok {
+			out := make([]any, 0, len(l)+len(r))
+			out = append(out, l...)
+			out = append(out, r...)
+			return out, true
+		}
+	case []int:
+		if r, ok := right.([]int); ok {
+			out := make([]int, 0, len(l)+len(r))
+			out = append(out, l...)
+			out = append(out, r...)
+			return out, true
+		}
+	case []float64:
+		if r, ok := right.([]float64); ok {
+			out := make([]float64, 0, len(l)+len(r))
+			out = append(out, l...)
+			out = append(out, r...)
+			return out, true
+		}
+	case []string:
+		if r, ok := right.([]string); ok {
+			out := make([]string, 0, len(l)+len(r))
+			out = append(out, l...)
+			out = append(out, r...)
+			return out, true
+		}
+	}
+
+	leftLen, ok := sliceLen(left)
+	if !ok {
+		return nil, false
+	}
+	rightLen, ok := sliceLen(right)
+	if !ok {
+		return nil, false
+	}
+	out := make([]any, 0, leftLen+rightLen)
+	out, ok = appendSliceItems(out, left)
+	if !ok {
+		return nil, false
+	}
+	return appendSliceItems(out, right)
+}
+
+func iterateSlice(v any, yield func(any) bool) bool {
+	switch s := v.(type) {
+	case []any:
+		for _, item := range s {
+			if !yield(item) {
+				return true
+			}
+		}
+		return true
+	case []int:
+		for _, item := range s {
+			if !yield(item) {
+				return true
+			}
+		}
+		return true
+	case []float64:
+		for _, item := range s {
+			if !yield(item) {
+				return true
+			}
+		}
+		return true
+	case []string:
+		for _, item := range s {
+			if !yield(item) {
+				return true
+			}
+		}
+		return true
+	}
+
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() || isByteArrayOrSlice(rv.Type()) {
+		return false
+	}
+	if rv.Kind() != reflect.Array && rv.Kind() != reflect.Slice {
+		return false
+	}
+	for idx := 0; idx < rv.Len(); idx++ {
+		if !yield(rv.Index(idx).Interface()) {
+			return true
+		}
+	}
+	return true
+}
+
+func recursiveDeepEqual(left, right any) bool {
+	l := normalize(left)
+	r := normalize(right)
+
+	switch lv := l.(type) {
+	case float64:
+		rv, ok := r.(float64)
+		return ok && lv == rv
+	case string:
+		rv, ok := r.(string)
+		return ok && lv == rv
+	case bool:
+		rv, ok := r.(bool)
+		return ok && lv == rv
+	}
+
+	if lLen, ok := sliceLen(l); ok {
+		rLen, ok := sliceLen(r)
+		if !ok || lLen != rLen {
+			return false
+		}
+		for idx := 0; idx < lLen; idx++ {
+			leftItem, _ := sliceItem(l, idx)
+			rightItem, _ := sliceItem(r, idx)
+			if !recursiveDeepEqual(leftItem, rightItem) {
+				return false
+			}
+		}
+		return true
+	}
+
+	switch lv := l.(type) {
+	case map[string]any:
+		rv, ok := r.(map[string]any)
+		if !ok || len(lv) != len(rv) {
+			return false
+		}
+		for key, leftValue := range lv {
+			rightValue, ok := rv[key]
+			if !ok || !recursiveDeepEqual(leftValue, rightValue) {
+				return false
+			}
+		}
+		return true
+	case map[any]any:
+		rv, ok := r.(map[any]any)
+		if !ok || len(lv) != len(rv) {
+			return false
+		}
+		for key, leftValue := range lv {
+			rightValue, ok := rv[key]
+			if !ok || !recursiveDeepEqual(leftValue, rightValue) {
+				return false
+			}
+		}
+		return true
+	}
+
+	return reflect.DeepEqual(l, r)
+}
+
 // toTime converts a string value into a time.Time if possible, otherwise
 // returns a zero time.
 func toTime(v any) time.Time {
@@ -154,13 +430,6 @@ func toTime(v any) time.Time {
 		return t
 	}
 	return time.Time{}
-}
-
-func isSlice(v any) bool {
-	if _, ok := v.([]any); ok {
-		return true
-	}
-	return false
 }
 
 func toBool(v any) bool {
@@ -195,12 +464,13 @@ func toBool(v any) bool {
 		return len(n) > 0
 	case []byte:
 		return len(n) > 0
-	case []any:
-		return len(n) > 0
 	case map[string]any:
 		return len(n) > 0
 	case map[any]any:
 		return len(n) > 0
+	}
+	if l, ok := sliceLen(v); ok {
+		return l > 0
 	}
 	return false
 }
@@ -269,21 +539,5 @@ func normalize(v any) any {
 
 // deepEqual returns whether two values are deeply equal.
 func deepEqual(left, right any) bool {
-	l := normalize(left)
-	r := normalize(right)
-
-	// Optimization for simple types to prevent allocations
-	switch l.(type) {
-	case float64:
-		if f, ok := r.(float64); ok {
-			return l == f
-		}
-	case string:
-		if s, ok := r.(string); ok {
-			return l == s
-		}
-	}
-
-	// Otherwise, just use the built-in deep equality check.
-	return reflect.DeepEqual(left, right)
+	return recursiveDeepEqual(left, right)
 }
