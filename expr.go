@@ -1,6 +1,20 @@
 // Package mexpr provides a simple expression parser.
 package mexpr
 
+func parseInterpreterOptions(options []InterpreterOption) (bool, bool) {
+	strict := false
+	unquoted := false
+	for _, opt := range options {
+		switch opt {
+		case StrictMode:
+			strict = true
+		case UnquotedStrings:
+			unquoted = true
+		}
+	}
+	return strict, unquoted
+}
+
 // Parse an expression and return the abstract syntax tree. If `types` is
 // passed, it should be a set of representative example values for the input
 // which will be used to type check the expression against.
@@ -22,13 +36,22 @@ func Parse(expression string, types any, options ...InterpreterOption) (*Node, E
 // TypeCheck will take a parsed AST and type check against the given input
 // structure with representative example values.
 func TypeCheck(ast *Node, types any, options ...InterpreterOption) Error {
-	i := NewTypeChecker(ast, options...)
+	_, unquoted := parseInterpreterOptions(options)
+	i := typeChecker{
+		ast:      ast,
+		unquoted: unquoted,
+	}
 	return i.Run(types)
 }
 
 // Run executes an AST with the given input and returns the output.
 func Run(ast *Node, input any, options ...InterpreterOption) (any, Error) {
-	i := NewInterpreter(ast, options...)
+	strict, unquoted := parseInterpreterOptions(options)
+	i := interpreter{
+		ast:      ast,
+		strict:   strict,
+		unquoted: unquoted,
+	}
 	return i.Run(input)
 }
 

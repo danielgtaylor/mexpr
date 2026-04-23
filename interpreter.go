@@ -57,17 +57,7 @@ type Interpreter interface {
 
 // NewInterpreter returns an interpreter for the given AST.
 func NewInterpreter(ast *Node, options ...InterpreterOption) Interpreter {
-	strict := false
-	unquoted := false
-
-	for _, opt := range options {
-		switch opt {
-		case StrictMode:
-			strict = true
-		case UnquotedStrings:
-			unquoted = true
-		}
-	}
+	strict, unquoted := parseInterpreterOptions(options)
 
 	return &interpreter{
 		ast:      ast,
