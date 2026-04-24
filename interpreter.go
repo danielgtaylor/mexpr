@@ -50,6 +50,48 @@ func checkStringBounds(ast *Node, length, idx int) Error {
 	return nil
 }
 
+func normalizeSliceBounds(ast *Node, length int, start, end float64) (int, int, Error) {
+	if start < 0 {
+		start += float64(length)
+	}
+	if end < 0 {
+		end += float64(length)
+	}
+	startIdx := int(start)
+	endIdx := int(end)
+	if startIdx < 0 || startIdx >= length {
+		return 0, 0, NewError(ast.Offset, ast.Length, "invalid index %d for slice of length %d", startIdx, length)
+	}
+	if endIdx < 0 || endIdx >= length {
+		return 0, 0, NewError(ast.Offset, ast.Length, "invalid index %d for slice of length %d", endIdx, length)
+	}
+	if startIdx > endIdx {
+		return 0, 0, NewError(ast.Offset, ast.Length, "slice start cannot be greater than end")
+	}
+	return startIdx, endIdx, nil
+}
+
+func normalizeStringSliceBounds(ast *Node, length int, start, end float64) (int, int, Error) {
+	if start < 0 {
+		start += float64(length)
+	}
+	if end < 0 {
+		end += float64(length)
+	}
+	startIdx := int(start)
+	endIdx := int(end)
+	if err := checkStringBounds(ast, length, startIdx); err != nil {
+		return 0, 0, err
+	}
+	if startIdx > endIdx {
+		return 0, 0, NewError(ast.Offset, ast.Length, "string slice start cannot be greater than end")
+	}
+	if err := checkStringBounds(ast, length, endIdx); err != nil {
+		return 0, 0, err
+	}
+	return startIdx, endIdx, nil
+}
+
 // Interpreter executes expression AST programs.
 type Interpreter interface {
 	Run(value any) (any, Error)
@@ -57,17 +99,7 @@ type Interpreter interface {
 
 // NewInterpreter returns an interpreter for the given AST.
 func NewInterpreter(ast *Node, options ...InterpreterOption) Interpreter {
-	strict := false
-	unquoted := false
-
-	for _, opt := range options {
-		switch opt {
-		case StrictMode:
-			strict = true
-		case UnquotedStrings:
-			unquoted = true
-		}
-	}
+	strict, unquoted := parseInterpreterOptions(options)
 
 	return &interpreter{
 		ast:      ast,
@@ -85,6 +117,52 @@ type interpreter struct {
 
 func (i *interpreter) Run(value any) (any, Error) {
 	return i.run(i.ast, value)
+}
+
+func (i *interpreter) fastLength(ast *Node, value any) (any, bool, Error) {
+	if ast == nil || ast.Type != NodeArrayIndex || ast.Right == nil || ast.Right.Type != NodeSlice {
+		return nil, false, nil
+	}
+
+	resultLeft, err := i.run(ast.Left, value)
+	if err != nil {
+		return nil, true, err
+	}
+	startValue, err := i.run(ast.Right.Left, value)
+	if err != nil {
+		return nil, true, err
+	}
+	endValue, err := i.run(ast.Right.Right, value)
+	if err != nil {
+		return nil, true, err
+	}
+	start, err := toNumber(ast.Right.Left, startValue)
+	if err != nil {
+		return nil, true, err
+	}
+	end, err := toNumber(ast.Right.Right, endValue)
+	if err != nil {
+		return nil, true, err
+	}
+
+	if leftLen, ok := sliceLen(resultLeft); ok {
+		startIdx, endIdx, err := normalizeSliceBounds(ast, leftLen, start, end)
+		if err != nil {
+			return nil, true, err
+		}
+		return endIdx - startIdx + 1, true, nil
+	}
+	if !isString(resultLeft) {
+		return nil, true, NewError(ast.Offset, ast.Length, "can only index strings or arrays but got %v", resultLeft)
+	}
+
+	left := toString(resultLeft)
+	leftLen := stringLength(left)
+	startIdx, endIdx, err := normalizeStringSliceBounds(ast, leftLen, start, end)
+	if err != nil {
+		return nil, true, err
+	}
+	return endIdx - startIdx + 1, true, nil
 }
 
 func (i *interpreter) run(ast *Node, value any) (any, Error) {
@@ -155,6 +233,11 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 		}
 		return nil, NewError(ast.Offset, ast.Length, "cannot get %v from %v", ast.Value, value)
 	case NodeFieldSelect:
+		if ast.Right != nil && ast.Right.Type == NodeIdentifier && ast.Right.Value == "length" {
+			if result, ok, err := i.fastLength(ast.Left, value); ok {
+				return result, err
+			}
+		}
 		i.prevFieldSelect = true
 		leftValue, err := i.run(ast.Left, value)
 		if err != nil {
@@ -188,22 +271,11 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				return nil, err
 			}
 			if leftLen, ok := sliceLen(resultLeft); ok {
-				if start < 0 {
-					start += float64(leftLen)
-				}
-				if end < 0 {
-					end += float64(leftLen)
-				}
-				if err := checkBounds(ast, resultLeft, int(start)); err != nil {
+				startIdx, endIdx, err := normalizeSliceBounds(ast, leftLen, start, end)
+				if err != nil {
 					return nil, err
 				}
-				if err := checkBounds(ast, resultLeft, int(end)); err != nil {
-					return nil, err
-				}
-				if int(start) > int(end) {
-					return nil, NewError(ast.Offset, ast.Length, "slice start cannot be greater than end")
-				}
-				result, ok := sliceRange(resultLeft, int(start), int(end))
+				result, ok := sliceRange(resultLeft, startIdx, endIdx)
 				if !ok {
 					return nil, NewError(ast.Offset, ast.Length, "can only index strings or arrays but got %v", resultLeft)
 				}
@@ -211,22 +283,11 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			}
 			left := toString(resultLeft)
 			leftLen := stringLength(left)
-			if start < 0 {
-				start += float64(leftLen)
-			}
-			if end < 0 {
-				end += float64(leftLen)
-			}
-			if err := checkStringBounds(ast, leftLen, int(start)); err != nil {
+			startIdx, endIdx, err := normalizeStringSliceBounds(ast, leftLen, start, end)
+			if err != nil {
 				return nil, err
 			}
-			if int(start) > int(end) {
-				return nil, NewError(ast.Offset, ast.Length, "string slice start cannot be greater than end")
-			}
-			if err := checkStringBounds(ast, leftLen, int(end)); err != nil {
-				return nil, err
-			}
-			return stringSlice(left, int(start), int(end)), nil
+			return stringSlice(left, startIdx, endIdx), nil
 		}
 		resultRight, err := i.run(ast.Right, value)
 		if err != nil {
@@ -244,22 +305,11 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 				return nil, err
 			}
 			if leftLen, ok := sliceLen(resultLeft); ok {
-				if start < 0 {
-					start += float64(leftLen)
-				}
-				if end < 0 {
-					end += float64(leftLen)
-				}
-				if err := checkBounds(ast, resultLeft, int(start)); err != nil {
+				startIdx, endIdx, err := normalizeSliceBounds(ast, leftLen, start, end)
+				if err != nil {
 					return nil, err
 				}
-				if err := checkBounds(ast, resultLeft, int(end)); err != nil {
-					return nil, err
-				}
-				if int(start) > int(end) {
-					return nil, NewError(ast.Offset, ast.Length, "slice start cannot be greater than end")
-				}
-				result, ok := sliceRange(resultLeft, int(start), int(end))
+				result, ok := sliceRange(resultLeft, startIdx, endIdx)
 				if !ok {
 					return nil, NewError(ast.Offset, ast.Length, "can only index strings or arrays but got %v", resultLeft)
 				}
@@ -267,22 +317,11 @@ func (i *interpreter) run(ast *Node, value any) (any, Error) {
 			}
 			left := toString(resultLeft)
 			leftLen := stringLength(left)
-			if start < 0 {
-				start += float64(leftLen)
-			}
-			if end < 0 {
-				end += float64(leftLen)
-			}
-			if err := checkStringBounds(ast, leftLen, int(start)); err != nil {
+			startIdx, endIdx, err := normalizeStringSliceBounds(ast, leftLen, start, end)
+			if err != nil {
 				return nil, err
 			}
-			if int(start) > int(end) {
-				return nil, NewError(ast.Offset, ast.Length, "string slice start cannot be greater than end")
-			}
-			if err := checkStringBounds(ast, leftLen, int(end)); err != nil {
-				return nil, err
-			}
-			return stringSlice(left, int(start), int(end)), nil
+			return stringSlice(left, startIdx, endIdx), nil
 		}
 		if isNumber(resultRight) {
 			idx, err := toNumber(ast, resultRight)

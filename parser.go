@@ -194,20 +194,34 @@ type Parser interface {
 
 // NewParser creates a new parser that uses the given lexer to get and process
 // tokens into an abstract syntax tree.
-func NewParser(lexer Lexer) Parser {
+func NewParser(lx Lexer) Parser {
+	if concrete, ok := lx.(*lexer); ok {
+		return &parser{
+			lexer: concrete,
+		}
+	}
 	return &parser{
-		lexer: lexer,
+		genericLexer: lx,
 	}
 }
 
 // parser is an implementation of a Pratt or top-down operator precedence parser
 type parser struct {
-	lexer Lexer
-	token *Token
+	lexer        *lexer
+	genericLexer Lexer
+	token        *Token
 }
 
 func (p *parser) advance() Error {
-	t, err := p.lexer.Next()
+	var (
+		t   *Token
+		err Error
+	)
+	if p.lexer != nil {
+		t, err = p.lexer.Next()
+	} else {
+		t, err = p.genericLexer.Next()
+	}
 	if err != nil {
 		return err
 	}

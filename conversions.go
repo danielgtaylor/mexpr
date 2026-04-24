@@ -537,7 +537,95 @@ func normalize(v any) any {
 	return v
 }
 
+func normalizedNumber(v any) (float64, bool) {
+	switch n := v.(type) {
+	case int:
+		return float64(n), true
+	case int8:
+		return float64(n), true
+	case int16:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case uint:
+		return float64(n), true
+	case uint8:
+		return float64(n), true
+	case uint16:
+		return float64(n), true
+	case uint32:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	case float32:
+		return float64(n), true
+	case float64:
+		return n, true
+	case func() int:
+		return float64(n()), true
+	case func() int8:
+		return float64(n()), true
+	case func() int16:
+		return float64(n()), true
+	case func() int32:
+		return float64(n()), true
+	case func() int64:
+		return float64(n()), true
+	case func() uint:
+		return float64(n()), true
+	case func() uint8:
+		return float64(n()), true
+	case func() uint16:
+		return float64(n()), true
+	case func() uint32:
+		return float64(n()), true
+	case func() uint64:
+		return float64(n()), true
+	case func() float32:
+		return float64(n()), true
+	case func() float64:
+		return n(), true
+	}
+	return 0, false
+}
+
+func normalizedString(v any) (string, bool) {
+	switch s := v.(type) {
+	case string:
+		return s, true
+	case []byte:
+		return string(s), true
+	case func() string:
+		return s(), true
+	}
+	return "", false
+}
+
+func normalizedBool(v any) (bool, bool) {
+	switch b := v.(type) {
+	case bool:
+		return b, true
+	case func() bool:
+		return b(), true
+	}
+	return false, false
+}
+
 // deepEqual returns whether two values are deeply equal.
 func deepEqual(left, right any) bool {
+	if leftNum, ok := normalizedNumber(left); ok {
+		rightNum, ok := normalizedNumber(right)
+		return ok && leftNum == rightNum
+	}
+	if leftStr, ok := normalizedString(left); ok {
+		rightStr, ok := normalizedString(right)
+		return ok && leftStr == rightStr
+	}
+	if leftBool, ok := normalizedBool(left); ok {
+		rightBool, ok := normalizedBool(right)
+		return ok && leftBool == rightBool
+	}
 	return recursiveDeepEqual(left, right)
 }

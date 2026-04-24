@@ -44,6 +44,51 @@ func getFunctionSchema(v any) (*schema, bool) {
 }
 
 func resolveLazyValue(v any) (any, bool) {
+	switch fn := v.(type) {
+	case nil:
+		return nil, false
+	case bool, string, []byte:
+		return nil, false
+	case int, int8, int16, int32, int64:
+		return nil, false
+	case uint, uint8, uint16, uint32, uint64:
+		return nil, false
+	case float32, float64:
+		return nil, false
+	case []any, []int, []float64, []string:
+		return nil, false
+	case map[string]any, map[any]any:
+		return nil, false
+	case func() bool:
+		return fn(), true
+	case func() int:
+		return fn(), true
+	case func() int8:
+		return fn(), true
+	case func() int16:
+		return fn(), true
+	case func() int32:
+		return fn(), true
+	case func() int64:
+		return fn(), true
+	case func() uint:
+		return fn(), true
+	case func() uint8:
+		return fn(), true
+	case func() uint16:
+		return fn(), true
+	case func() uint32:
+		return fn(), true
+	case func() uint64:
+		return fn(), true
+	case func() float32:
+		return fn(), true
+	case func() float64:
+		return fn(), true
+	case func() string:
+		return fn(), true
+	}
+
 	s, ok := getFunctionSchema(v)
 	if !ok || len(s.parameters) != 0 {
 		return nil, false

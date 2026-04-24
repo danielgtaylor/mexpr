@@ -182,14 +182,7 @@ type TypeChecker interface {
 
 // NewTypeChecker returns a type checker for the given AST.
 func NewTypeChecker(ast *Node, options ...InterpreterOption) TypeChecker {
-	unquoted := false
-
-	for _, opt := range options {
-		switch opt {
-		case UnquotedStrings:
-			unquoted = true
-		}
-	}
+	_, unquoted := parseInterpreterOptions(options)
 
 	return &typeChecker{
 		ast:      ast,

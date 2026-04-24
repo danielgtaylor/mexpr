@@ -133,7 +133,6 @@ func NewLexer(expression string) Lexer {
 		pos:        0,
 		runePos:    0,
 		lastWidth:  0,
-		token:      &Token{},
 	}
 }
 
@@ -145,7 +144,7 @@ type lexer struct {
 
 	// token is a cached token to prevent new tokens from being allocated.
 	// It is re-used on each call to `Next()`.
-	token *Token
+	token Token
 }
 
 // next returns the next rune in the expression at the current position.
@@ -176,25 +175,22 @@ func (l *lexer) peek() rune {
 	return r
 }
 
-func (l *lexer) newToken(typ TokenType, value string) *Token {
+func (l *lexer) newToken(typ TokenType, value string, offset, length uint16) *Token {
 	l.token.Type = typ
 	l.token.Value = value
-	l.token.Offset = l.runePos - uint16(utf8.RuneCountInString(value))
-	l.token.Length = uint8(utf8.RuneCountInString(value))
+	l.token.Offset = offset
+	l.token.Length = uint8(length)
 	if l.token.Length == 0 {
 		l.token.Length = 1
 	}
-	if typ == TokenString {
-		// Account for quotes
-		l.token.Offset--
-	}
-	return l.token
+	return &l.token
 }
 
 // consumeNumber reads runes from the expression until a non-number or
 // non-decimal is encountered.
 func (l *lexer) consumeNumber() *Token {
 	start := l.pos - l.lastWidth
+	offset := l.runePos - 1
 	for {
 		r := l.next()
 		if r != '.' && r != '_' && (r < '0' || r > '9') {
@@ -202,7 +198,7 @@ func (l *lexer) consumeNumber() *Token {
 			break
 		}
 	}
-	return l.newToken(TokenNumber, l.expression[start:l.pos])
+	return l.newToken(TokenNumber, l.expression[start:l.pos], offset, l.runePos-offset)
 }
 
 // consumeIdentifier reads runes from the expression until a non-identifier
@@ -210,6 +206,7 @@ func (l *lexer) consumeNumber() *Token {
 // then that corresponding token is returned, otherwise a normal identifier.
 func (l *lexer) consumeIdentifier() *Token {
 	start := l.pos - l.lastWidth
+	offset := l.runePos - 1
 	for {
 		r := l.next()
 		if r == -1 || basic(r) != TokenUnknown || r == ' ' || r == '\t' || r == '\r' || r == '\n' || r == '<' || r == '>' || r == '=' || r == '!' || r == '.' || r == '[' || r == '(' {
@@ -224,44 +221,63 @@ func (l *lexer) consumeIdentifier() *Token {
 		// keywords to be used as properties without issue.
 		switch string(value) {
 		case "and":
-			return l.newToken(TokenAnd, value)
+			return l.newToken(TokenAnd, value, offset, l.runePos-offset)
 		case "or":
-			return l.newToken(TokenOr, value)
+			return l.newToken(TokenOr, value, offset, l.runePos-offset)
 		case "not":
-			return l.newToken(TokenNot, value)
+			return l.newToken(TokenNot, value, offset, l.runePos-offset)
 		case "in", "contains", "startsWith", "endsWith", "before", "after":
-			return l.newToken(TokenStringCompare, value)
+			return l.newToken(TokenStringCompare, value, offset, l.runePos-offset)
 		case "where":
-			return l.newToken(TokenWhere, value)
+			return l.newToken(TokenWhere, value, offset, l.runePos-offset)
 		}
 	}
-	return l.newToken(TokenIdentifier, value)
+	return l.newToken(TokenIdentifier, value, offset, l.runePos-offset)
 }
 
 // consumeString reads runes from the expression until a non-escaped double
 // quote is encountered. Only double-quoted strings are supported.
 func (l *lexer) consumeString() (*Token, Error) {
-	buf := bytes.NewBuffer(make([]byte, 0, 8))
 	offset := l.runePos - 1
+	start := l.pos
+
 	for {
 		r := l.next()
-		if r == '\\' && l.peek() == '"' {
-			l.next()
-			buf.WriteRune('"')
-			continue
-		}
 		if r == -1 {
 			return nil, NewError(offset, 1, "unterminated string")
 		}
 		if r == '"' {
-			break
+			return l.newToken(TokenString, l.expression[start:l.pos-l.lastWidth], offset, l.runePos-offset), nil
 		}
-		buf.WriteRune(r)
+		if r != '\\' {
+			continue
+		}
+
+		buf := bytes.NewBuffer(make([]byte, 0, int(l.pos-start)+8))
+		buf.WriteString(l.expression[start : l.pos-l.lastWidth])
+		if l.peek() == '"' {
+			l.next()
+			buf.WriteRune('"')
+		} else {
+			buf.WriteRune('\\')
+		}
+
+		for {
+			r = l.next()
+			if r == '\\' && l.peek() == '"' {
+				l.next()
+				buf.WriteRune('"')
+				continue
+			}
+			if r == -1 {
+				return nil, NewError(offset, 1, "unterminated string")
+			}
+			if r == '"' {
+				return l.newToken(TokenString, buf.String(), offset, l.runePos-offset), nil
+			}
+			buf.WriteRune(r)
+		}
 	}
-	tok := l.newToken(TokenString, buf.String())
-	tok.Offset = offset
-	tok.Length = uint8(l.runePos - offset)
-	return tok, nil
 }
 
 func (l *lexer) Next() (*Token, Error) {
@@ -270,7 +286,7 @@ func (l *lexer) Next() (*Token, Error) {
 		r = l.next()
 	}
 	if r == -1 {
-		return l.newToken(TokenEOF, ""), nil
+		return l.newToken(TokenEOF, "", l.runePos, 0), nil
 	}
 
 	b := basic(r)
@@ -282,9 +298,10 @@ func (l *lexer) Next() (*Token, Error) {
 			}
 		}
 		if l.pos-l.lastWidth > uint16(len(l.expression)-1) {
-			return l.newToken(TokenEOF, ""), nil
+			return l.newToken(TokenEOF, "", l.runePos, 0), nil
 		}
-		return l.newToken(b, l.expression[l.pos-l.lastWidth:l.pos]), nil
+		offset := l.runePos - 1
+		return l.newToken(b, l.expression[l.pos-l.lastWidth:l.pos], offset, 1), nil
 	}
 
 	if r >= '0' && r <= '9' {
@@ -292,18 +309,33 @@ func (l *lexer) Next() (*Token, Error) {
 	}
 
 	if r == '<' || r == '>' || r == '!' {
+		offset := l.runePos - 1
 		eq := l.next()
 		if eq == '=' {
-			return l.newToken(TokenComparison, string([]rune{r, eq})), nil
+			switch r {
+			case '<':
+				return l.newToken(TokenComparison, "<=", offset, 2), nil
+			case '>':
+				return l.newToken(TokenComparison, ">=", offset, 2), nil
+			default:
+				return l.newToken(TokenComparison, "!=", offset, 2), nil
+			}
 		}
 		l.back()
-		return l.newToken(TokenComparison, string(r)), nil
+		switch r {
+		case '<':
+			return l.newToken(TokenComparison, "<", offset, 1), nil
+		case '>':
+			return l.newToken(TokenComparison, ">", offset, 1), nil
+		default:
+			return l.newToken(TokenComparison, "!", offset, 1), nil
+		}
 	}
 
 	if r == '=' {
 		if l.peek() == '=' {
 			l.next()
-			return l.newToken(TokenComparison, "=="), nil
+			return l.newToken(TokenComparison, "==", l.runePos-2, 2), nil
 		}
 		return nil, NewError(l.runePos-1, 1, "= should be ==")
 	}
